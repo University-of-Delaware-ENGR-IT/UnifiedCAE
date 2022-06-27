@@ -15,6 +15,7 @@ REM Return Codes:   0:      Conditions Met
 REM                 1638:   App Already Installed
 REM                 15639:  Other Prerequisite not satisfied
 REM                 3010:   Reboot Required Error
+REM					5:		Application Launch Denied by Server (Future Use)
 REM                 1359:   Internal Error
 REM                 574:    Unhandled Error
 REM                 87:     Invalid Parameter Error
@@ -41,7 +42,7 @@ REM													Changed Settings_Override_Code to App_Override_Code to match act
 REM												Features:
 REM													Added Option to Automatically Add/Remove exe location to AppPath
 REM													Added Option to Automatically Add/Remove registry keys for Solidworks EULA
-REM													Added Option to Automatcially Add/Remove HASP Drivers for Rocscience
+REM													Added Option to Automatically Add/Remove HASP Drivers for Rocscience
 REM													Added Application specific Debug Override
 REM													Added Web Override to enable remote override for all users
 REM													Added Elevation status to log
@@ -50,7 +51,17 @@ REM													Added Option to Enable/Disable Message Service if desired. If Di
 REM													Added Option to Debug Menu to toggle Message Service which is disabled by default in DEBUG mode
 REM													Added Option to Debug Menu to do a basic scan for potential issues
 REM													Added Functionality to handle shared machines: no removal of license, firewall rules etc.
-set "Current_Version=1.1"
+REM                 January  5th 2022	- 1.2 - Bug Fixes:
+REM													Fixed Username Handling for special cases
+REM													Fixed Automatic AV Rules to only add if defined
+REM													Fixed AppPath to only add if defined
+REM												Features: 
+REM						 							Updated Self Check to make actual issues Clear
+REM													Added LogLevel Override (use /LogLevel N to specify log level)
+REM													Optimized Web Overrides to load during REGISTER only
+REM													Added debug option to test run modes by re-invoking the script (which will cause things like overrides to be processed)
+
+set "Current_Version=1.2"
 
 REM ========== Basic Settings ==========
 
@@ -343,6 +354,8 @@ REM ==========Variables below should be edited before use of this script and ide
 REM [Institutional Variables]
 set "IT_Group_Name=ENGR-IT"
 set "IT_Group_Help_Location=https://engr.udel.edu/it"
+set "Web_Override_Location=https://appsanywhere.engr.udel.edu/UnifiedCAE/Bypass"
+set "Web_Authorization_Location=https://appsanywhere.engr.udel.edu/UnifiedCAE/Authorize"
 
 REM [Core Functionality Variables]
 set "MsgSvc_Enabled=True"
@@ -383,11 +396,11 @@ set "Cloudpaging_Profiles=%Programdata%\Endeavors Technologies\StreamingCore\Pro
 set "Log_Location=%ProgramData%\Endeavors Technologies\StreamingCore\Log\"
 set "Log_File=UnifiedCAE %User_Friendly_Application_Name%.log"
 set "Override_Location=%ProgramData%\%IT_Group_Name%\AppsAnywhere\Overrides"
-set "Web_Override_Location=https://appsanywhere.engr.udel.edu/UnifiedCAE/Bypass"
 set "Override_Name=%User_Friendly_Application_Name%"
 set "Web_Override_Name=%User_Friendly_Application_Name: =_%"
 set "Debug_Override_Name=%User_Friendly_Application_Name% DEBUG"
 set "Shared_Machine_Override_Name=SHARED"
+set "Override_Mode_List=ALL, REGISTER, ACTIVATE, VIRTUALIZE, LAUNCH, EXIT, DEVIRTUALIZE, DEACTIVATE"
 set "Shared_Machine=False"
 set "Uninstall_GUID_Allowed=Deny"
 set "Primary_Exe_Allowed=Deny"
@@ -422,6 +435,7 @@ set "MsgSvc_UninstallFile=%MsgSvc_InstallDir%\Uninstall.bat"
 set "MsgSvc_UninstallConfigFile=%MsgSvc_InstallDir%\Uninstall.cfg"
 
 REM [Log Level Lookup Table]
+REM set "LogLevel[Fatal]=0"
 set "LogLevel[Error]=0"
 set "LogLevel[Warning]=1"
 set "LogLevel[Info]=2"
@@ -540,7 +554,7 @@ if defined UsrVar_Require_DotNet_4x (
 					if "[%Auto_Install_DotNet_4x%]" == "[True]" (
 						if defined DotNET_Download[%UsrVar_Require_DotNet_4x%] (
 							if "[%Show_DotNet_4x_Installing_Message%]" == "[True]" (
-								call :Show_Message "%DotNet_4x_Installing_Text%"
+								call :1 "%DotNet_4x_Installing_Text%"
 							)
 							call :Log Verbose "DotNet 4.x: Downloading .Net %UsrVar_Require_DotNet_4x% installer from '!DotNET_Download[%UsrVar_Require_DotNet_4x%]!'"
 							bitsadmin /transfer ".NET %UsrVar_Require_DotNet_4x% Download" /priority foreground "!DotNET_Download[%UsrVar_Require_DotNet_4x%]!" "%~dp0\DotNet_%UsrVar_Require_DotNet_4x%.exe" > nul
@@ -927,10 +941,14 @@ for /f "tokens=1,3" %%A in ('sc query windefend') do (
 call :Count_Items UsrVar_AV_Rule
 if "[%Automatically_Add_AV_Rules%]" == "[True]" (
 	call :Log Verbose "AV: Adding Automatic Rules"
-	set /a UsrVar_AV_Rule+=1
-	set "UsrVar_AV_Rule[!UsrVar_AV_Rule!]=%UsrVar_Exe_Location%"
-	set /a UsrVar_AV_Rule+=1
-	set "UsrVar_AV_Rule[!UsrVar_AV_Rule!]=%UsrVar_ProgramFolder_Location%"
+	if defined UsrVar_Exe_Location (
+		set /a UsrVar_AV_Rule+=1
+		set "UsrVar_AV_Rule[!UsrVar_AV_Rule!]=%UsrVar_Exe_Location%"
+	)
+	if defined UsrVar_ProgramFolder_Location (
+		set /a UsrVar_AV_Rule+=1
+		set "UsrVar_AV_Rule[!UsrVar_AV_Rule!]=%UsrVar_ProgramFolder_Location%"
+	)
 )
 call :Log Debug "AV: Found %UsrVar_AV_Rule%+1 Rules"
 REM set UsrVar_AV_Rule=%errorlevel%
@@ -1288,7 +1306,9 @@ exit /b
 
 :AppPath <Add/Remove> <Exe Location>
 if "[%~2]" == "[]" (
-	call :AppPath %1 "%UsrVar_Exe_Location%"
+	if defined UsrVar_Exe_Location (
+		call :AppPath %1 "%UsrVar_Exe_Location%"
+	)
 	exit /b
 )
 if "[%Auto_Set_AppPath%]" == "[True]" (
@@ -1304,7 +1324,7 @@ if "[%Auto_Set_AppPath%]" == "[True]" (
 				reg add "%AppPath_Registry_location%\%~nx2" /v "%AppPath_Indicator%" /t REG_SZ /d "%User_Friendly_Application_Name%" /f
 			)
 		) else if "[%~1]" == "[Remove]" (
-			call :log Warning "AppPath: %AppPath_Registry_location%\%~nx2 Not Found"
+			call :log Warning "AppPath:  %AppPath_Registry_location%\%~nx2 Not Found"
 		) else (
 			call :log Error "AppPath: Mode is Invalid: %~1"
 			call :Show_Message "%Internal_Error_Text%"
@@ -1614,6 +1634,10 @@ if exist "%Override_Location%\%Debug_Override_Name%" (
 exit /b 0
 
 :Log_Header
+if defined Arg_LogLevel (
+	set "LogLevel=%Arg_LogLevel%"
+	call :Log Warning "Log Level overriden to: %Arg_LogLevel%"
+)
 if "%mode%" == "REGISTER" (
 	if defined Clear_Log_On_Register (
 		if /i "%Clear_Log_On_Register%" == "True" (
@@ -1722,6 +1746,21 @@ for /f "tokens=1* delims=\" %%r in ('reg query HKU') do (
 		)
 	)
 )
+if NOT defined domain (
+	call :Log Verbose "Failed to find user by username, checking for matching profile"
+	for /f "tokens=1* delims=\" %%r in ('reg query HKU') do (
+		reg query "hku\%%s\Volatile Environment" /v USERPROFILE 2>nul | findstr /iec:"%actual_username%" > nul
+		if NOT errorlevel 1 (
+			for /f "tokens=3" %%d in ('reg query "HKU\%%s\Volatile Environment" /v USERDOMAIN') do (
+				set domain=%%d
+				set sid=%%s
+			)
+			for /f "tokens=3" %%n in ('reg query "HKU\%%s\Volatile Environment" /v USERNAME') do (
+				set actual_username=%%n
+			)
+		)
+	)
+)
 if defined sid (
 	for /f "tokens=3" %%p in ('reg query "HKU\%sid%\Volatile Environment" /v HOMEPATH') do (
 		set "actual_userpath=%%p"
@@ -1759,7 +1798,7 @@ if NOT "%~1" == "" (
 	)
 	shift
 	shift
-	call :Parse_Arguments
+	goto :Parse_Arguments
 )
 exit /b 0
 
@@ -1778,43 +1817,47 @@ if exist "%Override_Location%\%Override_Name% %mode%" (
 ) else (
 	call :log Debug "%mode% Override not detected"
 )
-
 if defined Web_Override_Location (
-	del /q "%~dp0\%Override_Name% All"
-	if not exist "%~dp0\%Override_Name% All" (
-		call :log Debug "Checking for Web Override: %Web_Override_Location%/%Web_Override_Name%_All"
-		bitsadmin /transfer "UnifiedCAE Full Override check" /priority foreground "%Web_Override_Location%/%Web_Override_Name%_All" "%~dp0%Override_Name% All" > nul
-		if exist "%~dp0\%Override_Name% All" (
-			type "%~dp0\%Override_Name% All"|findstr /irc:^Enabled$ >nul
-			if NOT ERRORLEVEL 1 (
-				del /q "%~dp0\%Override_Name% All"
-				call :log Warning "Web Full Override detected - Bypassing checks"
-				call :exit %App_Override_Code%
-			) else (
-				del /q "%~dp0\%Override_Name% All"
-				call :log Debug "Web Full Override detected but file did not contain proper value"
-			)
-		) else (
-			call :log Debug "Web Full Override not detected"
+	if "[%mode%]" == "[REGISTER]" (
+		call :log Debug "Removing Old Web Overrides"
+		REM del /q "%Override_Location%\WEB %Override_Name% All"
+		for %%m in (%Override_Mode_List%) do (
+			del /q "%Override_Location%\WEB %Override_Name% %%m"
+		)
+		if not exist "%Override_Location%" (
+			mkdir "%Override_Location%"
+		)
+		REM call :log Debug "Checking for Web Override: %Web_Override_Location%/%Web_Override_Name%_All"
+		REM bitsadmin /transfer "UnifiedCAE Full Override check" /priority foreground "%Web_Override_Location%/%Web_Override_Name%_All" "%Override_Location%\WEB %Override_Name% All" > nul
+		
+		for %%m in (%Override_Mode_List%) do (
+			call :log Debug "Checking for Web Override: %Web_Override_Location%/%Web_Override_Name%_%%m"
+			bitsadmin /transfer "UnifiedCAE %mode% Override check" /priority foreground "%Web_Override_Location%/%Web_Override_Name%_%%m" "%Override_Location%\WEB %Override_Name% %%m" > nul
 		)
 	)
-	del /q "%~dp0\%Override_Name% %mode%"
-	if not exist "%~dp0\%Override_Name% %mode%" (
-		call :log Debug "Checking for Web Override: %Web_Override_Location%/%Web_Override_Name%_%Mode%"
-		bitsadmin /transfer "UnifiedCAE %mode% Override check" /priority foreground "%Web_Override_Location%/%Web_Override_Name%_%Mode%" "%~dp0%Override_Name% %mode%" > nul
-		if exist "%~dp0\%Override_Name% %mode%" (
-			type "%~dp0\%Override_Name% %mode%"|findstr /irc:^Enabled$ >nul
-			if NOT ERRORLEVEL 1 (
-				del /q "%~dp0\%Override_Name% %mode%"
-				call :log Warning "Web %mode% Override detected - Bypassing checks"
-				call :exit %App_Override_Code%
-			) else (
-				del /q "%~dp0\%Override_Name% %mode%"
-				call :log Debug "Web %mode% Override detected but file did not contain proper value"
-			)
+	if exist "%Override_Location%\WEB %Override_Name% ALL" (
+		type "%Override_Location%\WEB %Override_Name% ALL"|findstr /irc:^Enabled$ >nul
+		if NOT ERRORLEVEL 1 (
+			call :log Warning "Web Full Override detected - Bypassing checks"
+			call :exit %App_Override_Code%
 		) else (
-			call :log Debug "Web %mode% Override not detected"
+			del /q "%Override_Location%\WEB %Override_Name% ALL"
+			call :log Debug "Web Full Override detected but file did not contain proper value"
 		)
+	) else (
+		call :log Debug "Web Full Override not detected"
+	)
+	if exist "%Override_Location%\WEB %Override_Name% %mode%" (
+		type "%Override_Location%\WEB %Override_Name% %mode%"|findstr /irc:^Enabled$ >nul
+		if NOT ERRORLEVEL 1 (
+			call :log Warning "Web %mode% Override detected - Bypassing checks"
+			call :exit %App_Override_Code%
+		) else (
+			del /q "%Override_Location%\WEB %Override_Name% %mode%"
+			call :log Debug "Web %mode% Override detected but file did not contain proper value"
+		)
+	) else (
+		call :log Debug "Web %mode% Override not detected"
 	)
 ) else (
 	call :log Debug "Web Override not enabled"
@@ -2387,6 +2430,7 @@ exit /b
 :Debug_Menu_Initialize
 set "LogLevel=%LogLevel[Debug]%"
 set "MsgSvc_Enabled=False"
+set "Debug_Run_Mode=Internal"
 :Debug_Menu
 title DEBUG
 
@@ -2398,7 +2442,7 @@ echo/3. Run Command
 echo/4. Self Check
 echo/5. Toggle Echo (currently %echo%)
 echo/6. Toggle Message Service (currently %MsgSvc_Enabled%)
-choice /C 12345 /M "What do you want to do " 
+choice /C 123456 /M "What do you want to do " 
 if "%errorlevel%"=="1" (
 	call :Debug_Run
 )
@@ -2421,6 +2465,7 @@ goto :Debug_Menu
 call :Exit %Debug_Complete%
 
 :Debug_SelfCheck
+CLS
 setlocal enabledelayedexpansion
 echo Starting Self Check
 FOR /F "tokens=1,2* Delims==" %%V IN ('set ^| findstr /ibc:UsrVar') DO (
@@ -2428,14 +2473,53 @@ FOR /F "tokens=1,2* Delims==" %%V IN ('set ^| findstr /ibc:UsrVar') DO (
 	set Value=%%W
 	set !Variable!|find """" >nul 2>&1
 	if NOT ERRORLEVEL 1 (
-		echo !Variable! contains a " this may cause issues
+		REM echo !Variable! contains a " this may cause issues
+	)
+)
+for /f "usebackq delims== tokens=1*" %%V in (`type "%~dpnx0" ^| findstr /ibc:"set ""UsrVar_"`) do (
+	set Variable=%%V
+	set Variable=!Variable:~5!
+	set !Variable! 2>nul|find """" >nul 2>&1
+	if NOT ERRORLEVEL 1 (
+		echo !Variable! is malformed ^(Quote in Value^)
+	) else (
+		echo %%V=%%W| findstr /irc:"^set \"Usrvar_.*\"..*$" >nul 2>&1
+		if NOT ERRORLEVEL 1 (
+			echo !Variable! is malformed ^(Text After Quote^)
+		) else (
+			echo %%V=%%W| findstr /irc:"^set \"Usrvar_.*\"$" >nul 2>&1
+			if ERRORLEVEL 1 (
+				echo !Variable! is malformed ^(No Ending Quote^)
+			)
+		)
 	)
 )
 for /f "usebackq delims== tokens=1" %%V in (`type "%~dpnx0" ^| findstr /ibc:"set ""UsrVar_"`) do (
 	set Variable=%%V
 	set Variable=!Variable:~5!
 	if not defined !Variable! (
-		echo !Variable! is not Defined
+		echo !Variable!| findstr /irc:".*\[[0-9][0-9]*\]$" >nul 2>&1
+		if ERRORLEVEL 1 (
+			if NOT "!Variable!" == "!Variable:SolidWorks=!" (
+				if /i "[%UsrVar_Solidworks_EULA_Enabled%]" == "[True]" (
+					echo !Variable! is not Defined
+				)
+			) else (
+				if NOT "!Variable!" == "!Variable:ADSK=!" (
+					if /i "[%UsrVar_ADSK_License_Enabled%]" == "[True]" (
+						echo !Variable! is not Defined
+					)
+				) else (
+					if NOT "!Variable!" == "!Variable:Rocsci=!" (
+						if /i "[%UsrVar_Rocsci_Drivers_Enabled%]" == "[True]" (
+							echo !Variable! is not Defined
+						)
+					) else (
+						echo !Variable! is not Defined
+					)
+				)
+			)
+		)
 	)
 )
 echo Self Check Completed
@@ -2465,21 +2549,53 @@ echo 4. LAUNCH
 echo 5. EXIT
 echo 6. DEVIRTUALIZE
 echo 7. DEACTIVATE
-choice /C 1234567 /M "What do you want to run " 
+echo 8. Toggle Internal/External (Currently %Debug_Run_Mode%)
+choice /C 12345678 /M "What do you want to run " 
 if "%errorlevel%"=="1" (
-	call :Run_Methods REGISTER
+	if "%Debug_Run_Mode%" == "Internal" (
+		call :Run_Methods REGISTER
+	) else (
+		call "%~dpnx0" /mode REGISTER /LogLevel %LogLevel[Debug]%
+	)
 ) else if "%errorlevel%"=="2" (
-	call :Run_Methods ACTIVATE
+	if "%Debug_Run_Mode%" == "Internal" (
+		call :Run_Methods ACTIVATE
+	) else (
+		call "%~dpnx0" /mode ACTIVATE /LogLevel %LogLevel[Debug]%
+	)
 ) else if "%errorlevel%"=="3" (
-	call :Run_Methods VIRTUALIZE
+	if "%Debug_Run_Mode%" == "Internal" (
+		call :Run_Methods VIRTUALIZE
+	) else (
+		call "%~dpnx0" /mode VIRTUALIZE /LogLevel %LogLevel[Debug]%
+	)
 ) else if "%errorlevel%"=="4" (
-	call :Run_Methods LAUNCH
+	if "%Debug_Run_Mode%" == "Internal" (
+		call :Run_Methods LAUNCH
+	) else (
+		call "%~dpnx0" /mode LAUNCH /LogLevel %LogLevel[Debug]%
+	)
 ) else if "%errorlevel%"=="5" (
-	call :Run_Methods EXIT
+	if "%Debug_Run_Mode%" == "Internal" (
+		call :Run_Methods EXIT
+	) else (
+		call "%~dpnx0" /mode EXIT /LogLevel %LogLevel[Debug]%
+	)
 ) else if "%errorlevel%"=="6" (
-	call :Run_Methods DEVIRTUALIZE
+	if "%Debug_Run_Mode%" == "Internal" (
+		call :Run_Methods DEVIRTUALIZE
+	) else (
+		call "%~dpnx0" /mode DEVIRTUALIZE /LogLevel %LogLevel[Debug]%
+	)
 ) else if "%errorlevel%"=="7" (
-	call :Run_Methods DEACTIVATE
+	if "%Debug_Run_Mode%" == "Internal" (
+		call :Run_Methods DEACTIVATE
+	) else (
+		call "%~dpnx0" /mode DEACTIVATE /LogLevel %LogLevel[Debug]%
+	)
+) else if "%errorlevel%"=="8" (
+	call :Debug_Mode
+	goto :Debug_run
 )
 exit /b 0
 
@@ -2492,6 +2608,13 @@ if NOT "%Command%" == "" (
 	%Command%
 	echo === Command Complete ===
 	pause
+)
+exit /b 0
+:Debug_Mode
+if "%Debug_Run_Mode%" == "Internal" (
+	set "Debug_Run_Mode=External"
+) else (
+	set "Debug_Run_Mode=Internal"
 )
 exit /b 0
 
