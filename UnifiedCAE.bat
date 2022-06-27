@@ -19,19 +19,49 @@ REM                 1359:   Internal Error
 REM                 574:    Unhandled Error
 REM                 87:     Invalid Parameter Error
 REM Author:         Trevor Buttrey: tbuttrey@udel.edu
-REM Revisions:      August 26th 2020 - 1.0 - Initial Release 
-set "Current_Version=1.0"
+REM Revisions:      August 26th 2020	- 1.0 -	Initial Release 
+REM                 August  5th 2021	- 1.1 - Bug Fixes: 
+REM													Updated Message Service to V1.1 which updates MessageBoxSvc.bat, Uninstall.bat, and the uninstall registry keys 
+REM														MessageBoxSvc.bat: 	Removed the one message per execution limit to prevent desynchronization of state that could sometimes occur resulting in the user seeing old and irrelevant messages.
+REM														Uninstall.bat: 		Added Help Text if there's an error during uninstall.
+REM																			Fixed infinite loop that can occur when user can't elevate
+REM																			Fixed error handling to respect /s switch
+REM														Uninstall Registry:	Fixed Uninstall info to show Version information.
+REM																			Fixed Uninstall GUID to be unique between IT-Groups
+REM														Data Directory:		Granted Full Access to Data Directory so that messages can be deleted after they are shown.
+REM													Updated Message Initialization error message to indicate error could be either in Install or Update
+REM													Added "/f" to all "Reg Add" calls to prevent script stall if key exists
+REM													Changed the log level and content of various messages and added a few additional messages
+REM													Corrected some example items
+REM													Rearranged some of the main functions to make more sense e.g. bypass is now after log initialize and debug checks
+REM													Fixed a log message in HW_Keys that had a blank value
+REM													Changed Logfile name to have a space instead of underscore
+REM													Removed a errant "Pause" command
+REM													Changed Settings_Override_Code to App_Override_Code to match actual usage
+REM												Features:
+REM													Added Option to Automatically Add/Remove exe location to AppPath
+REM													Added Option to Automatically Add/Remove registry keys for Solidworks EULA
+REM													Added Option to Automatcially Add/Remove HASP Drivers for Rocscience
+REM													Added Application specific Debug Override
+REM													Added Web Override to enable remote override for all users
+REM													Added Elevation status to log
+REM													Added License Deactivation Custom Code Section and renamed Licensing to License Activation
+REM													Added Option to Enable/Disable Message Service if desired. If Disabled, all messages are logs but not shown to the user. 
+REM													Added Option to Debug Menu to toggle Message Service which is disabled by default in DEBUG mode
+REM													Added Option to Debug Menu to do a basic scan for potential issues
+REM													Added Functionality to handle shared machines: no removal of license, firewall rules etc.
+set "Current_Version=1.1"
 
 REM ========== Basic Settings ==========
 
 REM [Application information]
 
 REM Matlab examples are for 2019b
-REM Solidworks examples are for 2019
+REM Solidworks examples are for 2019 SP3.0
 
 REM	Aplication name and version
 REM Example: Matlab     "Mathworks", "Matlab", and "2019b"
-REM Example: Solidworks "Dasault", "Solidworks", and "2019"
+REM Example: Solidworks "Dassault", "Solidworks", and "2019"
 set "UsrVar_Application_Vendor="
 set "UsrVar_Application_Name="
 set "UsrVar_Application_Version="
@@ -200,7 +230,7 @@ REM DO ***NOT*** edit the 3 lines below this
 goto :Activate_License_End & REM Don't touch this
 :Activate_License & REM Don't touch this
 setlocal & REM Don't touch this
-REM Put Licensing Code Here:
+REM Put Licensing Activation Code Here:
 
 
 
@@ -209,6 +239,20 @@ endlocal & REM Don't touch this
 exit /b & REM Don't touch this
 :Activate_License_End & REM Don't touch this
 REM End of Licensing Activation
+
+REM DO ***NOT*** edit the 3 lines below this
+goto :Deactivate_License_End & REM Don't touch this
+:Deactivate_License & REM Don't touch this
+setlocal & REM Don't touch this
+REM Put Licensing Deactivation Code Here:
+
+
+
+REM DO ***NOT*** edit the 3 lines below this
+endlocal & REM Don't touch this
+exit /b & REM Don't touch this
+:Deactivate_License_End & REM Don't touch this
+REM End of Licensing Deactivation
 
 REM Files and Registry Keys That should be retained between loadings of the app
 REM this is useful for Applications that store hardware identifiers for the license, eula, or other such items.
@@ -242,14 +286,35 @@ REM  ========== Additional Files ==========
 
 REM ========== Application Specific Options ==========
 
+REM [RocScience HASP Driver Install]
+set "UsrVar_Rocsci_Drivers_Enabled="
+
+REM [Solidworks EULA]
+
+REM Enable Solidworks EULA bypass
+REM Value must be "True" or "False"
+set "UsrVar_Solidworks_EULA_Enabled="
+
+REM Solidworks version e.g. "2019"
+set "UsrVar_Solidworks_Version="
+
+REM Solidworks Service Pack e.g. "SP3.0"
+set "UsrVar_Solidworks_Service_Pack="
+
+REM Solidworks Service Pack in alternate format e.g. "SP03" or "False" if you aren't using eDrawings
+set "UsrVar_Solidworks_Service_Pack2="
+
+REM Solidworks Composer Short version e.g. "7.6" or "False" if you aren't using Composer
+set "UsrVar_Solidworks_Composer_Short_Version="
+
+REM Solidworks Composer Long version e.g. "7.6.5.1481" or "False" if you aren't using Composer
+set "UsrVar_Solidworks_Composer_Long_Version="
+
 REM [Autodesk 2020+ Licensing]
 
 REM Enable Autodesk Licensing activation
 REM Value must be "True" or "False"
 set "UsrVar_ADSK_License_Enabled="
-
-REM Remove License when app removed (may cause issues on shared systems)
-set "UsrVar_ADSK_Remove_License="
 
 REM Product version e.g. "2020.0.0.f"
 set "UsrVar_ADSK_Product_Version="
@@ -280,24 +345,31 @@ set "IT_Group_Name=ENGR-IT"
 set "IT_Group_Help_Location=https://engr.udel.edu/it"
 
 REM [Core Functionality Variables]
+set "MsgSvc_Enabled=True"
 set "Show_Alternate_AV_Instructions_Message=False"
 set "Show_Alternate_Firewall_Instructions_Message=False"
+set "Show_DotNet_4x_Installing_Message=True"
+set "Show_DotNet_35_Installing_Message=True"
 set "Allow_Firewall_Failure=True"
 set "Allow_AV_Failure=True"
 set "Automatically_Add_AV_Rules=True"
 set "Clear_Log_On_Register=False"
 set "Auto_Install_DotNet_35=True"
 set "Auto_Install_DotNet_4x=True"
+set "Auto_Set_AppPath=True"
+set "ADSK_Remove_License=True"
 REM Log Levels: 0=Error, 1=Warning, 2=Info, 3=Verbose, 4=Debug
 set "LogLevel=3"
 
 REM [Message Text]
 set "Internal_Error_Text=There was an error running a required process"
-set "App_Installed_Text=A conflicting version of %User_Friendly_Application_Name% or its data was found.\n\nYou will need to remove the current version of %User_Friendly_Application_Name% before you can use this one."
+set "App_Installed_Text=A conflicting version of %User_Friendly_Application_Name% or its data was found.\n\nYou will need to uninstall the current version of %User_Friendly_Application_Name% before you can use this one."
 set "App_Reminent_Text=Previous Application Data for %User_Friendly_Application_Name% was found.\n\nThis may result in the software not working as expected.\nIf you encounter issues please contact support"
+set "DotNet_4x_Installing_Text=%User_Friendly_Application_Name% requires .Net %UsrVar_Require_DotNet_4x%.\n\nPlease wait while it is automatically installed. This can take a few minutes to complete."
 set "DotNet_4x_Error_Text=%User_Friendly_Application_Name% requires .Net %UsrVar_Require_DotNet_4x%.\n\nYou will need to install it before you can use this application."
 set "DotNet_4x_Install_Error_Text=%User_Friendly_Application_Name% requires .Net %UsrVar_Require_DotNet_4x%.\n\nAutomatic installation Failed\nYou will need to install it manually before you can use this application."
 set "DotNet_4x_Install_Reboot_Text=%User_Friendly_Application_Name% requires .Net %UsrVar_Require_DotNet_4x%.\n\nAutomatic installation was Successfull\nYou will first need to reboot your computer and load the application again before you can use it."
+set "DotNet_35_Installing_Text=%User_Friendly_Application_Name% requires .Net 3.5.\n\nPlease wait while it is automatically installed. This can take a few minutes to complete."
 set "DotNet_35_Error_Text=%User_Friendly_Application_Name% requires .Net 3.5.\n\nYou will need to install it before you can use this application."
 set "DotNet_35_Install_Error_Text=%User_Friendly_Application_Name% requires .Net 3.5.\n\nAutomatic installation Failed\nYou will need to install it manually before you can use this application."
 set "Alternate_AV_Text=It appears you are using a third party Antivirus product.\n\nWhile not necessary to use the software, in order to improve performance on your system when using this applicaition, it is recommended that you add the following items to your AV's exclusion list:"
@@ -309,10 +381,16 @@ REM ==========Do not make changes below this line without good reason==========
 REM [Internal Variables]
 set "Cloudpaging_Profiles=%Programdata%\Endeavors Technologies\StreamingCore\Profiles\"
 set "Log_Location=%ProgramData%\Endeavors Technologies\StreamingCore\Log\"
-set "Log_File=UnifiedCAE_%User_Friendly_Application_Name%.log"
+set "Log_File=UnifiedCAE %User_Friendly_Application_Name%.log"
 set "Override_Location=%ProgramData%\%IT_Group_Name%\AppsAnywhere\Overrides"
+set "Web_Override_Location=https://appsanywhere.engr.udel.edu/UnifiedCAE/Bypass"
 set "Override_Name=%User_Friendly_Application_Name%"
+set "Web_Override_Name=%User_Friendly_Application_Name: =_%"
 set "Debug_Override_Name=%User_Friendly_Application_Name% DEBUG"
+set "Shared_Machine_Override_Name=SHARED"
+set "Shared_Machine=False"
+set "Uninstall_GUID_Allowed=Deny"
+set "Primary_Exe_Allowed=Deny"
 set "HW_Key_User_Location=%ProgramData%\%IT_Group_Name%\AppsAnywhere\HW_Keys\User
 set "HW_Key_Machine_Location=%ProgramData%\%IT_Group_Name%\AppsAnywhere\HW_Keys\Machine
 set "DOTNET_35_Registry_Location=HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v3.5"
@@ -321,11 +399,13 @@ set "Uninstall_Registry_Location=HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\
 set "Uninstall_WOW64_Registry_Location=HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"
 set "AppPath_Registry_location=HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\App Paths"
 set "AppPath_WOW64_Registry_location=HKLM\SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\App Paths"
+set "AppPath_Indicator=UnifiedCAE"
 set "Running_Directory=%~dp0"
 set "MsgSvc_Initalized=False"
 set "MsgSvc_ScriptMajorVersion=1"
-set "MsgSvc_ScriptMinorVersion=0"
-set "MsgSvc_Firendly_Name=AppsAnywhere Message Service V%MsgSvc_ScriptMajorVersion%"
+set "MsgSvc_ScriptMinorVersion=1"
+set "MsgSvc_Firendly_Name=AppsAnywhere Message Service (%IT_Group_Name%) V%MsgSvc_ScriptMajorVersion%"
+set "MsgSvc_Firendly_Name_Old=AppsAnywhere Message Service V%MsgSvc_ScriptMajorVersion%"
 set "MsgSvc_SubDirectory=%IT_Group_Name%\AppsAnywhere\MessageService\V%MsgSvc_ScriptMajorVersion%"
 set "MsgSvc_InstallDir=%Programfiles%\%MsgSvc_SubDirectory%"
 set "MsgSvc_InstallDirRef=%%Programfiles%%\%MsgSvc_SubDirectory%"
@@ -335,6 +415,7 @@ set "MsgSvc_TempDir=%temp%\%MsgSvc_SubDirectory%"
 set "MsgSvc_TempDirRef=%%temp%%\%MsgSvc_SubDirectory%"
 set "MsgSvc_DataReg=hklm\Software\%MsgSvc_SubDirectory%"
 set "MsgSvc_UninstallReg=%Uninstall_Registry_Location%\%MsgSvc_Firendly_Name%"
+set "MsgSvc_UninstallReg_Old=%Uninstall_Registry_Location%\%MsgSvc_Firendly_Name_Old%"
 set "MsgSvc_TaskSchdDir=\%MsgSvc_SubDirectory%"
 set "MsgSvc_LogDir=%MsgSvc_DataDir%\Logs"
 set "MsgSvc_UninstallFile=%MsgSvc_InstallDir%\Uninstall.bat"
@@ -375,7 +456,7 @@ REM [RETURN CODES]
 set "App_Installed_Code=1638"
 set "App_Not_Installed_Code=0"
 set "Changes_Made_Code=0"
-set "Settings_Override_Code=0"
+set "App_Override_Code=0"
 set "Internal_Error_Code=1359"
 set "Unhandled_Error_Code=574"
 set "Invalid_Parameter=87"
@@ -389,12 +470,12 @@ setlocal enabledelayedexpansion
 call :Log_Initialize
 call :Parse_Arguments %*
 call :Get_Mode
-call :Override_Check
 if defined mode (
 	if "%mode%" == "DEBUG" (
-		call :Debug_Menu
+		call :Debug_Menu_Initialize
 	) else (
 		call :Log_Header
+		call :Override_Check
 		call :Run_Methods %mode%
 	)
 ) else (
@@ -418,12 +499,18 @@ if "%~1" == "REGISTER" (
 ) else if "%~1" == "VIRTUALIZE" (
 	call :License Add
 	call :HW_Keys Load
+	call :AppPath Add
+	call :Solidworks_EULA Add
+	call :RocScience_HASP Add
 ) else if "%~1" == "LAUNCH" (
 	call :Service_LaunchClose Start
 ) else if "%~1" == "EXIT" (
 	call :Service_LaunchClose Stop
 	call :HW_Keys Save
 ) else if "%~1" == "DEVIRTUALIZE" (
+	call :RocScience_HASP Remove
+	call :Solidworks_EULA Remove
+	call :AppPath Remove
 	call :License Remove
 	call :Service_AddRemove Stop
 ) else if "%~1" == "DEACTIVATE" (
@@ -452,7 +539,10 @@ if defined UsrVar_Require_DotNet_4x (
 					call :log Info "DotNet 4.x: Need at least !DotNET_Release[%UsrVar_Require_DotNet_4x%]! but !Release! was found"
 					if "[%Auto_Install_DotNet_4x%]" == "[True]" (
 						if defined DotNET_Download[%UsrVar_Require_DotNet_4x%] (
-							call :Log Info "DotNet 4.x: Downloading .Net %UsrVar_Require_DotNet_4x% installer from '!DotNET_Download[%UsrVar_Require_DotNet_4x%]!'"
+							if "[%Show_DotNet_4x_Installing_Message%]" == "[True]" (
+								call :Show_Message "%DotNet_4x_Installing_Text%"
+							)
+							call :Log Verbose "DotNet 4.x: Downloading .Net %UsrVar_Require_DotNet_4x% installer from '!DotNET_Download[%UsrVar_Require_DotNet_4x%]!'"
 							bitsadmin /transfer ".NET %UsrVar_Require_DotNet_4x% Download" /priority foreground "!DotNET_Download[%UsrVar_Require_DotNet_4x%]!" "%~dp0\DotNet_%UsrVar_Require_DotNet_4x%.exe" > nul
 							if ERRORLEVEL 1 (
 								call :Log Error "DotNet 4.x: Failed to download .Net %UsrVar_Require_DotNet_4x% installer from '!DotNET_Download[%UsrVar_Require_DotNet_4x%]!'"
@@ -464,8 +554,8 @@ if defined UsrVar_Require_DotNet_4x (
 									call :Show_Message "%DotNet_4x_Install_Error_Text%"
 									call :Exit %Prereq_Not_Found_Code%
 								) else (
-									call :Log Info "DotNet 4.x: Successfully Downloaded Installer"
-									call :Log Info "DotNet 4.x: Installing .Net %UsrVar_Require_DotNet_4x% from '%~dp0\DotNet_%UsrVar_Require_DotNet_4x%.exe'"
+									call :Log Verbose "DotNet 4.x: Successfully Downloaded Installer"
+									call :Log Verbose "DotNet 4.x: Installing .Net %UsrVar_Require_DotNet_4x% from '%~dp0\DotNet_%UsrVar_Require_DotNet_4x%.exe'"
 									start "" /wait "%~dp0\DotNet_%UsrVar_Require_DotNet_4x%.exe" /passive /norestart
 									if ERRORLEVEL 1 (
 										if ERRORLEVEL 3010 (
@@ -514,6 +604,9 @@ if defined UsrVar_Require_DotNet_35 (
 		if ERRORLEVEL 1 (
 			call :Log Warning "DotNet 3.5: .Net 3.5 was Not Found"
 			if "[%Auto_Install_DotNet_35%]" == "[True]" (
+				if "[%Show_DotNet_35_Installing_Message%]" == "[True]" (
+					call :Show_Message "%DotNet_35_Installing_Text%"
+				)
 				call :Log Info "DotNet 3.5: Installing"
 				Dism /online /Enable-Feature /FeatureName:"NetFx3"
 				if ERRORLEVEL 1 (
@@ -537,13 +630,23 @@ exit /b
 
 :App_Installed_Check
 setlocal
+if "%Shared_Machine%" == "True" (
+	call :log Warning "Shared Machine, Setting All Detection Methods to Allow"
+	set "Uninstall_GUID_Allowed=Allow"
+	set "Primary_Exe_Allowed=Allow"
+	set "UsrVar_SideBySide_Allowed=Allow"
+	set "UsrVar_ProgramFolder_Allowed=Allow"
+	set "UsrVar_LicenseData_Allowed=Allow"
+	set "UsrVar_ProgramData_Allowed=Allow"
+	set "UsrVar_RegistryData_Allowed=Allow"
+)
 
 REM Check Uninstall GUID
 call :Log Info "Checking GUIDs"
 if defined UsrVar_Uninstall_GUID (
 	if /i NOT "%UsrVar_Uninstall_GUID%" == "False" (
-		call :Check_Registry "%Uninstall_Registry_Location%\%UsrVar_Uninstall_GUID%" "Deny"
-		call :Check_Registry "%Uninstall_WOW64_Registry_Location%\%UsrVar_Uninstall_GUID%" "Deny"
+		call :Check_Registry "%Uninstall_Registry_Location%\%UsrVar_Uninstall_GUID%" "%Uninstall_GUID_Allowed%"
+		call :Check_Registry "%Uninstall_WOW64_Registry_Location%\%UsrVar_Uninstall_GUID%" "%Uninstall_GUID_Allowed%"
 	) else (
 		call :log Info "Skipping GUID Check"
 	)
@@ -556,7 +659,7 @@ REM Check Main EXE
 call :Log Info "Checking Main exe"
 if defined UsrVar_Exe_Location (
 	if /i NOT "%UsrVar_Exe_Location%" == "False" (
-		call :Check_Folder "%UsrVar_Exe_Location%" "Deny"
+		call :Check_Folder "%UsrVar_Exe_Location%" "%Primary_Exe_Allowed%"
 	) else (
 		call :log Info "Skipping Main exe Check"
 	)
@@ -638,17 +741,17 @@ setlocal enabledelayedexpansion
 set "item=%~1"
 
 if /i "!item:~0,2!" == "HK" (
-	call :Log Verbose "License: Checking Registry: '!item!'"
+	call :Log Info "License: Checking Registry: '!item!'"
 	if /i "!item:~0,4!" == "HKCU" (
-		call :Log Verbose "License: Converting HKCU to HKU"
+		call :Log Debug "License: Converting HKCU to HKU"
 		if not defined SID (
 			call :Get_Username
 		)
 		call set item=%%item:HKCU=HKU\!sid!%%
-		call :Log Verbose "License: '%item%' changed to '!item!'"
+		call :Log Debug "License: '%item%' changed to '!item!'"
 	)
 	if "!item:~-1!" == "\" (
-		call :Log Verbose "License: Registry is Key"
+		call :Log Debug "License: Registry is Key"
 		for /f %%v in ('reg query "!item:~0,-1!"') do (
 			set value=%%v
 			call :ShortenReg value
@@ -659,28 +762,27 @@ if /i "!item:~0,2!" == "HK" (
 			)
 		)
 		call :Log Debug "License: done comparing"
-		pause
 	) else (
-		call :Log Verbose "License: Registry is Key + Value"
+		call :Log Debug "License: Registry is Key + Value"
 		call :ParseFile "!item!"
 		call :strLen filename count
 		set /a count+=1
 		call set filepath=%%item:~0,-!count!%%
-		call :Log Verbose "License: Registry is '!filepath!' + '!filename!'"
+		call :Log Debug "License: Registry is '!filepath!' + '!filename!'"
 		reg query "!filepath!" /v "!filename!">nul 2>&1
 		if NOT ERRORLEVEL 1 (
 			call :Check_Registry "!filepath!" %2
 		)
 	)
 ) else (
-	call :Log Verbose "License: Checking Filesystem: '!item!'"
+	call :Log Info "License: Checking Filesystem: '!item!'"
 	if "!item:~-1!" == "\" (
-		call :Log Verbose "License: Path is Directory"
+		call :Log Debug "License: Path is Directory"
 		>nul 2>nul dir /a-d "!item!*" && (
 			call :Check_Folder "!item!" %2
 		)
 	) else (
-		call :Log Verbose "License: Path is Directory + File"
+		call :Log Debug "License: Path is Directory + File"
 		call :Check_Folder "!item!" %2
 	)
 )
@@ -690,12 +792,12 @@ exit /b
 :Check_Folder <Folder> <Allowed>
 call :Log Verbose "Checking for folder: '%~1' Allowed: '%~2'"
 if "%~1" == "" (
-	call :Log Error "Arg[1] not Defined"
+	call :Log Error "Check Folder: Arg[1] not Defined"
 	call :Show_Message "%Internal_Error_Text%"
 	call :exit %Internal_Error_Code%
 )
 if "%~2" == "" (
-	call :Log Error "Arg[2] not Defined"
+	call :Log Error "Check Folder: Arg[2] not Defined"
 	call :Show_Message "%Internal_Error_Text%"
 	call :exit %Internal_Error_Code%
 )
@@ -708,9 +810,9 @@ if exist %1 (
 		call :Log Warning "Folder Found: '%~1'"
 		call :Show_Message "%App_Reminent_Text%"
 	) else if "%~2" == "Allow" (
-		call :Log Verbose "Main Program Folder Found: '%~1'"
+		call :Log Verbose "Folder Found: '%~1'"
 	) else (
-		call :Log Error "Invalid Value: '%~2'"
+		call :Log Error "Check Folder: Invalid Value: '%~2'"
 		call :Show_Message "%Internal_Error_Text%"
 		call :exit %Internal_Error_Code%
 	)
@@ -733,7 +835,7 @@ if NOT ERRORLEVEL 1 (
 	) else if "%~2" == "Allow" (
 		call :log Verbose "Registry Found: '%~1'"
 	) else (
-		call :Log Error "Invalid Value: '%~2'"
+		call :Log Error "Check Registry: Invalid Value: '%~2'"
 		call :Show_Message "%Internal_Error_Text%"
 		call :exit %Internal_Error_Code%
 	)
@@ -747,7 +849,12 @@ setlocal enabledelayedexpansion
 if "%~1" == "Add" (
 	call :Log Info "Firewall: Adding Firewall Rules"
 ) else if "%~1" == "Remove" (
-	call :Log Info "Firewall: Removing Firewall Rules"
+	if "%Shared_Machine%" == "True" (
+		call :Log Warning "Firewall: Shared Machine, Firewall Rules will not be Removed"
+		exit /b 0
+	) else (
+		call :Log Info "Firewall: Removing Firewall Rules"
+	)
 ) else (
 	call :Log Error "Firewall: Invalid Firewall Mode: '%~1'"
 	call :Show_Message "%Internal_Error_Text%"
@@ -755,13 +862,14 @@ if "%~1" == "Add" (
 )
 call :Count_Items UsrVar_Firewall_Rule
 if "[%UsrVar_Firewall_Allow_Main_exe%]" == "[True]" (
+	call :Log Verbose "Firewall: Adding Automatic Rule"
 	set /a UsrVar_Firewall_Rule+=1
 	set "UsrVar_Firewall_Rule[!UsrVar_Firewall_Rule!]=%UsrVar_Exe_Location%"
 )
-call :Log Debug "Firewall: Found %UsrVar_Firewall_Rule% Rules
+call :Log Debug "Firewall: Found %UsrVar_Firewall_Rule%+1 Rules"
 for /l %%i in (0,1,%UsrVar_Firewall_Rule%) do (
 	if "%~1" == "Add" (
-		call :Log Info "Firewall: Adding Firewall Rule: '!UsrVar_Firewall_Rule[%%i]!'"
+		call :Log Verbose "Firewall: Adding Firewall Rule: '!UsrVar_Firewall_Rule[%%i]!'"
 		netsh advfirewall firewall add rule name="AppsAnywhere - %User_Friendly_Application_Name% - !UsrVar_Firewall_Rule[%%i]!" dir=in action=allow program="!UsrVar_Firewall_Rule[%%i]!
 		if ERRORLEVEL 1 (
 			if /i "%Allow_Firewall_Failure%" == "False" (
@@ -773,7 +881,7 @@ for /l %%i in (0,1,%UsrVar_Firewall_Rule%) do (
 			)
 		)
 	) else if "%~1" == "Remove" (
-		call :Log Info "Firewall: Removing Firewall Rule: '!UsrVar_Firewall_Rule[%%i]!'"
+		call :log Verbose "Firewall: Removing Firewall Rule: '!UsrVar_Firewall_Rule[%%i]!'"
 		netsh advfirewall firewall delete rule name="AppsAnywhere - %User_Friendly_Application_Name% - !UsrVar_Firewall_Rule[%%i]!"
 		if ERRORLEVEL 1 (
 			if /i "%Allow_Firewall_Failure%" == "False" (
@@ -794,7 +902,12 @@ setlocal enabledelayedexpansion
 if "%~1" == "Add" (
 	call :Log Info "AV: Adding AV Rules"
 ) else if "%~1" == "Remove" (
-	call :Log Info "AV: Removing AV Rules"
+	if "%Shared_Machine%" == "True" (
+		call :Log Warning "AV: Shared Machine, AV Rules will not be Removed"
+		exit /b 0
+	) else (
+		call :Log Info "AV: Removing AV Rules"
+	)
 ) else (
 	call :Log Error "AV: Invalid AV Mode: '%~1'"
 	call :Show_Message "%Internal_Error_Text%"
@@ -812,13 +925,14 @@ for /f "tokens=1,3" %%A in ('sc query windefend') do (
 	)
 )
 call :Count_Items UsrVar_AV_Rule
-call :Log Debug "AV: Found %UsrVar_AV_Rule% Rules
 if "[%Automatically_Add_AV_Rules%]" == "[True]" (
+	call :Log Verbose "AV: Adding Automatic Rules"
 	set /a UsrVar_AV_Rule+=1
 	set "UsrVar_AV_Rule[!UsrVar_AV_Rule!]=%UsrVar_Exe_Location%"
 	set /a UsrVar_AV_Rule+=1
 	set "UsrVar_AV_Rule[!UsrVar_AV_Rule!]=%UsrVar_ProgramFolder_Location%"
 )
+call :Log Debug "AV: Found %UsrVar_AV_Rule%+1 Rules"
 REM set UsrVar_AV_Rule=%errorlevel%
 if "[%defender%]" == "[disabled]" (
 	call :log Info "AV: Defender is disabled"
@@ -836,7 +950,7 @@ if "[%defender%]" == "[disabled]" (
 ) else (
 	for /l %%i in (0,1,%UsrVar_AV_Rule%) do (
 		if "%~1" == "Add" (
-			call :Log Info "AV: Adding AV Rule: '!UsrVar_AV_Rule[%%i]!'"
+			call :log Verbose "AV: Adding AV Rule: '!UsrVar_AV_Rule[%%i]!'"
 			powershell -command "Add-MpPreference -ExclusionPath '!UsrVar_AV_Rule[%%i]!'"
 			if ERRORLEVEL 1 (
 				if /i "%Allow_AV_Failure%" == "False" (
@@ -849,7 +963,7 @@ if "[%defender%]" == "[disabled]" (
 			)
 			
 		) else if "%~1" == "Remove" (
-			call :Log Info "AV: Removing AV Rule: '!UsrVar_AV_Rule[%%i]!'"
+			call :log Verbose "AV: Removing AV Rule: '!UsrVar_AV_Rule[%%i]!'"
 			powershell -command "Remove-MpPreference -ExclusionPath '!UsrVar_AV_Rule[%%i]!'"
 			if ERRORLEVEL 1 (
 				if /i "%Allow_AV_Failure%" == "False" (
@@ -884,13 +998,13 @@ if "%~1" == "Load" (
 
 call :Count_Items UsrVar_HWKey_Machine
 for /l %%I in (0,1,%UsrVar_HWKey_Machine%) do (
-	call :Log Info "HW_Keys: Machine: Processing: '!UsrVar_HWKey_Machine[%%I]!'"
+	call :log Verbose "HW_Keys: Machine: Processing: '!UsrVar_HWKey_Machine[%%I]!'"
 	set "item=!UsrVar_HWKey_Machine[%%I]!"
 	call :HW_Key_SaveLoad %1 "!UsrVar_HWKey_Machine[%%I]!" "%HW_Key_Machine_Location%"
 )
 call :Count_Items UsrVar_HWKey_User
 for /l %%I in (0,1,%UsrVar_HWKey_User%) do (
-	call :Log Info "HW_Keys: User: Processing: '!UsrVar_HWKey_User[%%I]!'"
+	call :log Verbose "HW_Keys: User: Processing: '!UsrVar_HWKey_User[%%I]!'"
 	set "item=!UsrVar_HWKey_User[%%I]!"
 	if not defined full_username (
 		call :Get_Username
@@ -930,14 +1044,18 @@ if not exist "%~3" (
 set "item=%~2"
 if "%~1" == "Save" (
 	if "!item:~0,2!" == "HK" (
-		call :Log Info "HW_Key: Saving Registry Key: '!item!'"
+		call :log Verbose "HW_Key: Saving Registry Key: '!item!'"
 		if "!item:~0,4!" == "HKCU" (
-			call :log Verbose "HW_Key: Converting HKCU to HKU"
+			call :Log Debug "HW_Key: Converting HKCU to HKU"
 			if not defined SID (
 				call :Get_Username
+				if ERRORLEVEL 1 (
+					call :Log Warning "Unable to get SID cannot save HW Key"
+					exit /b %Internal_Error_Code%
+				)
 			)
 			call set item=%%item:HKCU=HKU\!sid!%%
-			call :log Verbose "HW_Key: '%item%' changed to '!item!'"
+			call :Log Debug "HW_Key: '%item%' changed to '!item!'"
 		)
 		call :ParseFile "!item!"
 		call :strLen filename count
@@ -947,14 +1065,14 @@ if "%~1" == "Save" (
 		set /a delims+=1
 		call :Log Debug "HW_Key: Path: '!filepath!' Name: '!filename!' Delims: '!delims!'"
 		call :HW_Key_Get_Reg_Val
-		call :Log Info "HW_Key: value of '!item!' is '!value!'"
+		call :Log Verbose "HW_Key: value of '!item!' is '!value!'"
 		if not exist "%~3\%User_Friendly_Application_Name%\Reg\" (
 			mkdir "%~3\%User_Friendly_Application_Name%\Reg\"
 		)
 		echo/!value!>"%~3\%User_Friendly_Application_Name%\Reg\!filename!"
 		
 	) else (
-		call :Log Info "HW_Key: Saving File: '!item!'"
+		call :log Verbose "HW_Key: Saving File: '!item!'"
 		rem call :ParseFile "!item!"
 		if not exist "%~3\%User_Friendly_Application_Name%\File\" (
 			mkdir "%~3\%User_Friendly_Application_Name%\File\"
@@ -963,19 +1081,19 @@ if "%~1" == "Save" (
 		if ERRORLEVEL 1 (
 			call :Log Warning "HW_Key: Save Failed: Code: !errorlevel!"
 		) else (
-			call :Log Info "HW_Key: Save Successful"
+			call :log Info "HW_Key: Save Successful"
 		)
 	)
 ) else (
 	if "!item:~0,2!" == "HK" (
-		call :Log Info "HW_Key: Loading Registry Key: '!item!'"
+		call :log Verbose "HW_Key: Loading Registry Key: '!item!'"
 		if "!item:~0,4!" == "HKCU" (
-			call :log Verbose "HW_Key: Converting HKCU to HKU"
+			call :Log Debug "HW_Key: Converting HKCU to HKU"
 			if not defined SID (
 				call :Get_Username
 			)
 			call set item=%%item:HKCU=HKU\!sid!%%
-			call :log Verbose "HW_Key: '!UsrVar_HWKey_Machine[%%I]!' changed to '!item!'"
+			call :Log Debug "HW_Key: '%item%' changed to '!item!'"
 		)
 		call :ParseFile "!item!"
 		if exist "%~3\%User_Friendly_Application_Name%\Reg\!filename!" (
@@ -990,19 +1108,19 @@ if "%~1" == "Save" (
 				set "type=%%L"
 				set "value=%%M"
 			)
-			call :Log Info "HW_Key: value of '!item!' is of type '!type!' with value '!value!'"
+			call :Log Verbose "HW_Key: value of '!item!' is of type '!type!' with value '!value!'"
 			REG ADD "!filepath!" /v "!filename!" /t "!type!" /d "!value!" /f /reg:64
 			if ERRORLEVEL 1 (
 				call :Log Warning "HW_Key: Load Failed: Could not load '!filepath!' '!filename!' '!type!' '!value!' Code: !errorlevel!"
 			) else (
-				call :Log Info "HW_Key: Load Successful"
+				call :log Info "HW_Key: Load Successful"
 			)
 		) else (
 			call :Log Warning "HW_Key: No Saved Value in %~3\%User_Friendly_Application_Name%\Reg\!filename!"
 		)
 		
 	) else (
-		call :Log Info "HW_Key: Loading File: '!item!'"
+		call :log Verbose "HW_Key: Loading File: '!item!'"
 		rem call :ParseFile "!item!"
 		call :ParseFile "!item!"
 		if exist "%~3\%User_Friendly_Application_Name%\File\!filename!" (
@@ -1013,7 +1131,7 @@ if "%~1" == "Save" (
 			if ERRORLEVEL 1 (
 				call :Log Warning "HW_Key: Load Failed: Could not copy '%~3\%User_Friendly_Application_Name%\File\!filename!' to '!FileDrive!!filepath!' Code: !errorlevel!"
 			) else (
-				call :Log Info "HW_Key: Load Successful"
+				call :log Verbose "HW_Key: Load Successful"
 			)
 		) else (
 			call :Log Warning "HW_Key: No Saved Value in '%~3\%User_Friendly_Application_Name%\File\!filename!'"
@@ -1043,13 +1161,193 @@ rem full_username
 endlocal
 exit /b
 
+:RocScience_HASP <Add/Remove>
+if "[%UsrVar_Rocsci_Drivers_Enabled%]" == "[True]" (
+	call :Log Info "RocScience: Running HASP Configuration
+	if "[%~1]" == "[Add]" (
+		call :Log Verbose "RocScience: Adding HASP Driver"
+		"%ProgramFiles(x86)%\Rocscience\RocActivate\haspdinst.exe" -install -killprocess -fi -nomsg
+		if ERRORLEVEL 1 (
+			call :Log Warning "RocScience: Failed to add Driver"
+		) else (
+			call :Log Verbose "RocScience: Driver added Successfully"
+		)
+	) else if "[%~1]" == "[Remove]" (
+		if "%Shared_Machine%" == "True" (
+			call :Log Warning "RocScience: Shared Computer, HASP Driver will not be Removed"
+		) else (
+			call :Log Verbose "RocScience: Removing HASP Driver"
+			"%ProgramFiles(x86)%\Rocscience\RocActivate\haspdinst.exe" -fr -killprocess -purge -nomsg
+			if ERRORLEVEL 1 (
+				call :Log Warning "RocScience: Failed to add Driver"
+			) else (
+				call :Log Verbose "RocScience: Driver added Successfully"
+			)
+		)
+	) else (
+		call :Log Error "RocScience: Invalid Mode: '%~1'"
+		call :Show_Message "%Internal_Error_Text%"
+		call :exit %Internal_Error_Code%
+	)
+)
+exit /b
+
+:Solidworks_EULA <Add/Remove>
+if NOT "[%UsrVar_Solidworks_EULA_Enabled%]" == "[True]" (
+	exit /b
+)
+call :Log Info "Solidworks: Running EULA Configuration"
+if not defined UsrVar_Solidworks_Version (
+	call :log Error "Solidworks: UsrVar_Solidworks_Version not defined"
+	call :Show_Message "%Internal_Error_Text%"
+	call :exit %Internal_Error_Code%
+)
+if not defined UsrVar_Solidworks_Service_Pack (
+	call :log Error "Solidworks: UsrVar_Solidworks_Service_Pack not defined"
+	call :Show_Message "%Internal_Error_Text%"
+	call :exit %Internal_Error_Code%
+)
+if not defined UsrVar_Solidworks_Service_Pack2 (
+	call :log Error "Solidworks: UsrVar_Solidworks_Service_Pack2 not defined"
+	call :Show_Message "%Internal_Error_Text%"
+	call :exit %Internal_Error_Code%
+)
+if not defined UsrVar_Solidworks_Composer_Short_Version (
+	call :log Error "Solidworks: UsrVar_Solidworks_Composer_Short_Version not defined"
+	call :Show_Message "%Internal_Error_Text%"
+	call :exit %Internal_Error_Code%
+)
+if not defined UsrVar_Solidworks_Composer_Long_Version (
+	call :log Error "Solidworks: UsrVar_Solidworks_Composer_Long_Version not defined"
+	call :Show_Message "%Internal_Error_Text%"
+	call :exit %Internal_Error_Code%
+)
+if not defined actual_username (
+	call :Get_Username
+	if ERRORLEVEL 1 (
+		call :Log Warning "Unable to get Username, Solidworks EULA cannot be bypassed"
+		exit /b %Internal_Error_Code%
+	)
+)
+
+if "%~1" == "Add" (
+	call :Log Info "Solidworks: Adding EULAS"
+	call :Log Verbose "Solidworks: Adding Solidworks EULA"
+	reg add "HKU\%sid%\Software\Solidworks\Solidworks %UsrVar_Solidworks_Version%\Security" /v "EULA Accepted %UsrVar_Solidworks_Version% %UsrVar_Solidworks_Service_Pack% %computername% %actual_username%" /t REG_SZ /d "Yes" /f
+	if NOT "%UsrVar_Solidworks_Composer_Short_Version%" == "False" (
+		if NOT "%UsrVar_Solidworks_Composer_Long_Version%" == "False" (
+			call :Log Verbose "Solidworks: Adding Composer EULA"
+			reg add "HKU\%sid%\Software\Solidworks\Dassault Systemes\Composer\%UsrVar_Solidworks_Composer_Short_Version%\Preferences" /v "EulaAccepted %UsrVar_Solidworks_Version% %UsrVar_Solidworks_Composer_Long_Version% %computername% %actual_username%" /t REG_DWORD /d "1" /f
+			reg add "HKU\%sid%\Software\Solidworks\Dassault Systemes\Composer\%UsrVar_Solidworks_Composer_Short_Version%\Preferences" /v "EulaAccepted" /t REG_DWORD /d "1" /f
+			reg add "HKU\%sid%\Software\Solidworks\Dassault Systemes\Composer\%UsrVar_Solidworks_Composer_Short_Version%\Preferences" /v "Composer.EulaAccepted" /t REG_DWORD /d "1" /f
+			reg add "HKU\%sid%\Software\Solidworks\Dassault Systemes\Composer\%UsrVar_Solidworks_Composer_Short_Version%\Preferences" /v "Sync.EulaAccepted" /t REG_DWORD /d "1" /f
+			reg add "HKU\%sid%\Software\Solidworks\Dassault Systemes\Composer\%UsrVar_Solidworks_Composer_Short_Version%\Preferences" /v "RefreshProgressUI" /t REG_DWORD /d "1" /f
+		)
+	)
+	if NOT "%UsrVar_Solidworks_Service_Pack2%" == "False" (
+		call :Log Verbose "Solidworks: Adding eDrawings EULA"
+		reg add "HKU\%sid%\Software\eDrawings\e%UsrVar_Solidworks_Version%\General" /v "ShowLicense %UsrVar_Solidworks_Version% %UsrVar_Solidworks_Service_Pack2% %computername% %actual_username%" /t REG_DWORD /d "1" /f
+		reg add "HKU\%sid%\Software\eDrawings\e%UsrVar_Solidworks_Version%\General" /v "ShowProLicense %UsrVar_Solidworks_Version% %UsrVar_Solidworks_Service_Pack2% %computername% %actual_username%" /t REG_DWORD /d "1" /f
+	)
+	call :Log Verbose "Solidworks: Adding SRAC EULA"
+	reg add "HKU\%sid%\Software\srac" /v "EULA Accepted %UsrVar_Solidworks_Version% %UsrVar_Solidworks_Service_Pack% %computername% %actual_username%" /t REG_SZ /d "1" /f
+) else if "%~1" == "Remove" (
+	call :Log Info "Solidworks: Removing EULAS"
+	call :Log Verbose "Solidworks: Removing Solidworks EULA"
+	reg delete "HKU\%sid%\Software\Solidworks\Solidworks %UsrVar_Solidworks_Version%\Security" /v "EULA Accepted %UsrVar_Solidworks_Version% %UsrVar_Solidworks_Service_Pack% %computername% %actual_username%" /f
+	if NOT "%UsrVar_Solidworks_Composer_Short_Version%" == "False" (
+		if NOT "%UsrVar_Solidworks_Composer_Long_Version%" == "False" (
+			call :Log Verbose "Solidworks: Removing Composer EULA"
+			reg delete "HKU\%sid%\Software\Solidworks\Dassault Systemes\Composer\%UsrVar_Solidworks_Composer_Short_Version%\Preferences" /v "EulaAccepted %UsrVar_Solidworks_Version% %UsrVar_Solidworks_Composer_Long_Version% %computername% %actual_username%" /f
+			if "%Shared_Machine%" == "True" (
+				call :Log Warning "Solidworks: Shared Computer, Shared EULA keys will not be Removed"
+			) else (
+				reg delete "HKU\%sid%\Software\Solidworks\Dassault Systemes\Composer\%UsrVar_Solidworks_Composer_Short_Version%\Preferences" /v "EulaAccepted" /f
+				reg delete "HKU\%sid%\Software\Solidworks\Dassault Systemes\Composer\%UsrVar_Solidworks_Composer_Short_Version%\Preferences" /v "Composer.EulaAccepted" /f
+				reg delete "HKU\%sid%\Software\Solidworks\Dassault Systemes\Composer\%UsrVar_Solidworks_Composer_Short_Version%\Preferences" /v "Sync.EulaAccepted" /f
+				reg delete "HKU\%sid%\Software\Solidworks\Dassault Systemes\Composer\%UsrVar_Solidworks_Composer_Short_Version%\Preferences" /v "RefreshProgressUI" /f
+			)
+		)
+	)
+	if NOT "%UsrVar_Solidworks_Service_Pack2%" == "False" (
+		call :Log Verbose "Solidworks: Removing eDrawings EULA"
+		reg delete "HKU\%sid%\Software\eDrawings\e%UsrVar_Solidworks_Version%\General" /v "ShowLicense %UsrVar_Solidworks_Version% %UsrVar_Solidworks_Service_Pack2% %computername% %actual_username%" /f
+		reg delete "HKU\%sid%\Software\eDrawings\e%UsrVar_Solidworks_Version%\General" /v "ShowProLicense %UsrVar_Solidworks_Version% %UsrVar_Solidworks_Service_Pack2% %computername% %actual_username%" /f
+	)
+	call :Log Verbose "Solidworks: Removing SRAC EULA"
+	reg delete "HKU\%sid%\Software\srac" /v "EULA Accepted %UsrVar_Solidworks_Version% %UsrVar_Solidworks_Service_Pack% %computername% %actual_username%" /f
+	REM TODO: Cleanup empty Registry Keys left behind
+) else (
+	call :Log Error "Solidworks: Invalid Mode: '%~1'"
+	call :Show_Message "%Internal_Error_Text%"
+	call :exit %Internal_Error_Code%
+)
+call :Log Info "Solidworks: Done"
+
+exit /b
+
+:AppPath <Add/Remove> <Exe Location>
+if "[%~2]" == "[]" (
+	call :AppPath %1 "%UsrVar_Exe_Location%"
+	exit /b
+)
+if "[%Auto_Set_AppPath%]" == "[True]" (
+	reg query "%AppPath_Registry_location%\%~nx2" >nul 2>&1
+	if ERRORLEVEL 1 (
+		REM if add, add, if remove, error
+		if "[%~1]" == "[Add]" (
+			if "%Shared_Machine%" == "True" (
+				call :Log Warning "AppPath: Shared Computer, AppPath will not be Added"
+			) else (
+				call :Log Info "AppPath: Adding '%AppPath_Registry_location%\%~nx2' '%~dpnx2'"
+				reg add "%AppPath_Registry_location%\%~nx2" /ve /t REG_SZ /d "%~dpnx2" /f
+				reg add "%AppPath_Registry_location%\%~nx2" /v "%AppPath_Indicator%" /t REG_SZ /d "%User_Friendly_Application_Name%" /f
+			)
+		) else if "[%~1]" == "[Remove]" (
+			call :log Warning "AppPath: %AppPath_Registry_location%\%~nx2 Not Found"
+		) else (
+			call :log Error "AppPath: Mode is Invalid: %~1"
+			call :Show_Message "%Internal_Error_Text%"
+			call :exit %Internal_Error_Code%
+		)
+	) else (
+		REM if add, abort, if remove, remove
+		if "[%~1]" == "[Add]" ( 
+			call :log Info "AppPath: %AppPath_Registry_location%\%~nx2 already exists"
+		) else if "[%~1]" == "[Remove]" (
+			for /f "tokens=2*" %%I in ('reg query "%AppPath_Registry_location%\%~nx2" /v "%AppPath_Indicator%" ^| find "REG_SZ"') do (
+				if "%%J" == "%User_Friendly_Application_Name%" (
+					if "%Shared_Machine%" == "True" (
+						call :Log Warning "AppPath: Shared Computer, AppPath will not be Removed"
+					) else (
+						call :Log Info "AppPath: Removing '%AppPath_Registry_location%\%~nx2'"
+						reg delete "%AppPath_Registry_location%\%~nx2" /f
+					)
+				) else (
+					call :log Info "AppPath: %AppPath_Registry_location%\%~nx2 was not added by this script"
+				)
+			)
+		) else (
+			call :log Error "AppPath: Mode is Invalid: %~1"
+			call :Show_Message "%Internal_Error_Text%"
+			call :exit %Internal_Error_Code%
+		)
+	)
+	rem reg query "%AppPath_WOW64_Registry_location%\%~nx2" >nul 2>&1
+)
+exit /b
+
 :License <Add/Remove>
 setlocal enabledelayedexpansion
 if "[%UsrVar_ADSK_License_Enabled%]" == "[True]" (
 	call :Log Info "Licensing: Running Autodesk Licensing"
 	call :Adsk_License %~1
 )
-call :Activate_License
+if "[%~1]" == "[Add]" (
+	call :Activate_License
+) else if "[%~1]" == "[Remove]" (
+	call :Deactivate_License
+)
 endlocal
 exit /b
 
@@ -1060,8 +1358,8 @@ if "[%~1]" == "[]" (
 	call :Show_Message "%Internal_Error_Text%"
 	call :exit %Internal_Error_Code%
 )
-if not defined UsrVar_ADSK_Remove_License (
-	call :log Error "ADSK License: UsrVar_ADSK_Remove_License not defined"
+if not defined ADSK_Remove_License (
+	call :log Error "ADSK License: ADSK_Remove_License not defined"
 	call :Show_Message "%Internal_Error_Text%"
 	call :exit %Internal_Error_Code%
 )
@@ -1133,9 +1431,13 @@ if "[%~1]" == "[Add]" (
 
 ) else if "[%~1]" == "[Remove]" (
 	call :log Info "ADSK License: Mode is '%~1'"
-	if "%UsrVar_ADSK_Remove_License" == "True" (
-		call :Manage_Service AdskLicensingService Start
-		"%CommonProgramFiles(x86)%\Autodesk Shared\AdskLicensing\%ADSK_Licensing_Version%\helper\AdskLicensingInstHelper.exe" deregister --pv %UsrVar_ADSK_Product_Version% --prod_key %UsrVar_ADSK_Product_Key%
+	if "%ADSK_Remove_License" == "True" (
+		if "%Shared_Machine%" == "True" (
+			call :Log Warning "ADSK License: Shared Computer, License will not be Removed"
+		) else (
+			call :Manage_Service AdskLicensingService Start
+			"%CommonProgramFiles(x86)%\Autodesk Shared\AdskLicensing\%ADSK_Licensing_Version%\helper\AdskLicensingInstHelper.exe" deregister --pv %UsrVar_ADSK_Product_Version% --prod_key %UsrVar_ADSK_Product_Key%
+		)
 	)
 ) else (
 	call :log Error "ADSK License: Mode is Invalid: %~1"
@@ -1163,7 +1465,7 @@ if "[%~1]" == "[Start]" (
 )
 call :Count_Items UsrVar_Service_AddRemove
 for /l %%i in (0,1,%UsrVar_Service_AddRemove%) do (
-	call :Log Info "Service Add/Remove: %~1: '!UsrVar_Service_AddRemove[%%i]!'"
+	call :log Verbose "Service Add/Remove: %~1: '!UsrVar_Service_AddRemove[%%i]!'"
 	call :Manage_Service "!UsrVar_Service_AddRemove[%%i]!" %1
 )
 endlocal
@@ -1187,7 +1489,7 @@ if "[%~1]" == "[Start]" (
 )
 call :Count_Items UsrVar_Service_LaunchClose
 for /l %%i in (0,1,%UsrVar_Service_LaunchClose%) do (
-	call :Log Info "Service Launch/Close: %~1: '!UsrVar_Service_LaunchClose[%%i]!'"
+	call :log Verbose "Service Launch/Close: %~1: '!UsrVar_Service_LaunchClose[%%i]!'"
 	call :Manage_Service "!UsrVar_Service_LaunchClose[%%i]!" %1
 )
 endlocal
@@ -1303,8 +1605,11 @@ if NOT defined Log_File (
 	rem call :Display_Message Error "Internal Error\n\nUnable to Initialize log:\nFile not defined"
 	goto :Exit %Invalid_Parameter%
 )
-if exist %Override_Location%\DEBUG (
-	set "LogLevel=4"
+if exist "%Override_Location%\DEBUG" (
+	set "LogLevel=%LogLevel[Debug]%"
+)
+if exist "%Override_Location%\%Debug_Override_Name%" (
+	set "LogLevel=%LogLevel[Debug]%"
 )
 exit /b 0
 
@@ -1322,6 +1627,19 @@ call :Log Info "Log Started"
 call :Log Info "Script Version: %Current_Version%"
 call :Log Info "Log Level: %LogLevel%"
 call :Log Info "Mode: %mode%"
+net session >nul 2>&1
+if ERRORLEVEL 1 (
+	call :Log Warning "Elevated: False"
+) else (
+	call :Log Info "Elevated: True"
+)
+if "%LogLevel%" == "%LogLevel[Debug]%" (
+	call :Log Debug "User Variables:"
+	FOR /F "tokens=1,2* Delims==" %%V IN ('set ^| findstr /ibc:UsrVar') DO (
+		echo %%V=%%W
+		call :Log Debug "%%V = %%W"
+	)
+)
 exit /b 0
 
 :log <Level> <Description>
@@ -1344,7 +1662,7 @@ if defined arg_mode (
 		set mode=%override_mode%
 		call :log Debug "Got mode from Builtin Override"
 	) else (
-		REM TODO: Determine mode from name
+		REM Determine mode from name
 		if NOT "!Running_Directory:%Cloudpaging_Profiles%=!" == "%Running_Directory%" (
 			for /f "usebackq tokens=1 delims=_" %%u in ('%~n0') do set mode=%%u
 			call :log Debug "Got mode from Script Name"
@@ -1359,14 +1677,15 @@ exit /b 0
 
 :Get_Username
 REM Get User running directory
+call :log Info "Getting Username"
 rem set "Running_Directory=C:\ProgramData\Endeavors Technologies\StreamingCore\Profiles\ENGRAdmin\Sessions\0\Applications\{1A91397E-F274-42F7-A513-69963108434A}\CAE\"
 if NOT "!Running_Directory:%Cloudpaging_Profiles%=!" == "%Running_Directory%" (
 	call :log Verbose "Getting username from Run Directory"
 	set Running_Directory=!Running_Directory:%Cloudpaging_Profiles%=!
 	for /f "usebackq tokens=1 delims=\" %%u in ('!Running_Directory!') do set actual_username=%%u
 ) else (
-	call :log Verbose "Getting username from environment variable"
 	if NOT "%username%" == "%computername%$" (
+		call :log Verbose "Getting username from environment variable"
 		set actual_username=%username%
 	) else (
 		rem Check Active Connections for User
@@ -1388,7 +1707,7 @@ if NOT "!Running_Directory:%Cloudpaging_Profiles%=!" == "%Running_Directory%" (
 				call :Log Warning "Running as system, multiple users active, unable to identify username"
 			)
 		) else (
-			call :Log Warning "Running as system, query not available,unable to identify username"
+			call :Log Warning "Running as system, query not available, unable to identify username"
 			rem call :exit %Internal_Error_Code%
 		)
 	)
@@ -1410,10 +1729,10 @@ if defined sid (
 )
 
 if defined domain (
-	call :Log Info "Domain=%domain%"
-	call :Log Info "Full Username=%domain%\%actual_username%"
-	call :Log Info "SID=%sid%
-	call :Log Info "HomePath=%actual_userpath%
+	call :Log Verbose "Domain=%domain%"
+	call :Log Verbose "Full Username=%domain%\%actual_username%"
+	call :Log Verbose "SID=%sid%
+	call :Log Verbose "HomePath=%actual_userpath%
 	set "full_username=%domain%\%actual_username%"
 	exit /b 0
 ) else (
@@ -1429,7 +1748,7 @@ if NOT "%~1" == "" (
 		set "val=%~2"
 		if "!arg:~0,1!" == "/" (
 			set "Arg_!arg:~1!=%~2"
-			call :log Verbose "Set %~1 to %~2"
+			call :Log Debug "Set %~1 to %~2"
 		) else (
 			call :Log Error "Argument not formated properly: '%~1' '%~2', '%~1' is not an argument"
 			call :Exit %Invalid_Parameter%
@@ -1449,13 +1768,67 @@ REM check for override
 if exist "%Override_Location%\%Override_Name% All" (
 	call :log Warning "Full Override detected - Bypassing checks"
 	call :exit %App_Override_Code%
+) else (
+	call :log Debug "Full Override not detected"
 )
 
 if exist "%Override_Location%\%Override_Name% %mode%" (
 	call :log Warning "%mode% Override detected - Bypassing checks"
 	call :exit %App_Override_Code%
+) else (
+	call :log Debug "%mode% Override not detected"
 )
+
+if defined Web_Override_Location (
+	del /q "%~dp0\%Override_Name% All"
+	if not exist "%~dp0\%Override_Name% All" (
+		call :log Debug "Checking for Web Override: %Web_Override_Location%/%Web_Override_Name%_All"
+		bitsadmin /transfer "UnifiedCAE Full Override check" /priority foreground "%Web_Override_Location%/%Web_Override_Name%_All" "%~dp0%Override_Name% All" > nul
+		if exist "%~dp0\%Override_Name% All" (
+			type "%~dp0\%Override_Name% All"|findstr /irc:^Enabled$ >nul
+			if NOT ERRORLEVEL 1 (
+				del /q "%~dp0\%Override_Name% All"
+				call :log Warning "Web Full Override detected - Bypassing checks"
+				call :exit %App_Override_Code%
+			) else (
+				del /q "%~dp0\%Override_Name% All"
+				call :log Debug "Web Full Override detected but file did not contain proper value"
+			)
+		) else (
+			call :log Debug "Web Full Override not detected"
+		)
+	)
+	del /q "%~dp0\%Override_Name% %mode%"
+	if not exist "%~dp0\%Override_Name% %mode%" (
+		call :log Debug "Checking for Web Override: %Web_Override_Location%/%Web_Override_Name%_%Mode%"
+		bitsadmin /transfer "UnifiedCAE %mode% Override check" /priority foreground "%Web_Override_Location%/%Web_Override_Name%_%Mode%" "%~dp0%Override_Name% %mode%" > nul
+		if exist "%~dp0\%Override_Name% %mode%" (
+			type "%~dp0\%Override_Name% %mode%"|findstr /irc:^Enabled$ >nul
+			if NOT ERRORLEVEL 1 (
+				del /q "%~dp0\%Override_Name% %mode%"
+				call :log Warning "Web %mode% Override detected - Bypassing checks"
+				call :exit %App_Override_Code%
+			) else (
+				del /q "%~dp0\%Override_Name% %mode%"
+				call :log Debug "Web %mode% Override detected but file did not contain proper value"
+			)
+		) else (
+			call :log Debug "Web %mode% Override not detected"
+		)
+	)
+) else (
+	call :log Debug "Web Override not enabled"
+)
+
+if exist %Override_Location%\%Shared_Machine_Override_Name% (
+	set "Shared_Machine=True"
+	call :log Warning "Shared Machine: True"
+) else (
+	call :log Debug "Shared Machine: False"
+)
+
 exit /b 0
+
 
 :Message_Service_Initialize
 REM Initialize Message Service
@@ -1490,7 +1863,7 @@ if NOT ERRORLEVEL 1 (
 		call :Message_Service_Install
 	)
 	if ERRORLEVEL 1 (
-		call :Log Warning "Unable to install Message Service"
+		call :Log Warning "Unable to install or Update Message Service"
 		set "MsgSvc_Initalized=Failed"
 	) else (
 		REM TODO: Check For Errors
@@ -1501,20 +1874,146 @@ if NOT ERRORLEVEL 1 (
 	if ERRORLEVEL 1 (
 		call :Message_Service_Install_User
 	) else (
-		call :Log Info "User task is already installed"
+		call :log Verbose "User task is already installed"
 	)
 	if not exist "%MsgSvc_DataDir%\%full_username%\Messages" (
 		mkdir "%MsgSvc_DataDir%\%full_username%\Messages"
 	)
 ) else (
-	 call :Log Warning "Unable to get Username, Message Service cannot Initialize
+	 call :Log Warning "Unable to get Username, Message Service cannot Initialize"
 	 set "MsgSvc_Initalized=Failed"
+)
+exit /b 0
+
+:Message_Service_Update
+REM Message Service .1 Update
+if "!MsgSvc_InstalledMinorVersion!" lss "1" (
+	call :Log Info "Message Service Update: Starting Update to V%MsgSvc_ScriptMajorVersion%.1"
+	call :Log Verbose "Message Service Update: Backing up current MessageBoxSvc.bat"
+	if exist "%MsgSvc_InstallDir%\MessageBoxSvc.bat.bak" (
+		del /q "%MsgSvc_InstallDir%\MessageBoxSvc.bat.bak"
+		if ERRORLEVEL 1 (
+			call :Log Error "Message Service Update: Unable to remove previous messageBoxSvc.bat backup"
+			exit /b 1
+		)
+	)
+	ren "%MsgSvc_InstallDir%\MessageBoxSvc.bat" MessageBoxSvc.bat.bak
+	if ERRORLEVEL 1 (
+		call :Log Error "Message Service Update: Unable to create backup of messageBoxSvc.bat"
+		exit /b 1
+	)
+	call :Log Verbose "Message Service Update: Updating MessageBoxSvc.bat"
+	(
+	echo\@echo off
+	echo\cd /d %%~dp0
+	REM Read message
+	echo\for /f "usebackq delims=|" %%%%D in ^(`dir /b "%%~1"^^^|findstr /irc:"Message_.\.txt"`^) do ^(
+	echo\		for /f "tokens=*" %%%%L in ^(%%~1\%%%%D^) do ^(
+	echo\			start "" /min wscript "%%~dp0MessageBox.vbs" "%%%%L" "AppsAnywhere"
+	echo\		^)
+	echo\		del /q "%%~1\%%%%D"
+	echo\^)
+	) > "%MsgSvc_InstallDir%\MessageBoxSvc.bat"
+	if ERRORLEVEL 1 (
+		call :Log Error "Message Service Update: Unable to update MessageBoxSvc.bat"
+		if exist "%MsgSvc_InstallDir%\MessageBoxSvc.bat" (
+			del /q "%MsgSvc_InstallDir%\MessageBoxSvc.bat"
+			if ERRORLEVEL 1 (
+				call :Log Error "Message Service Update: Unable to remove partial messageBoxSvc.bat"
+			)
+		)
+		ren "%MsgSvc_InstallDir%\MessageBoxSvc.bat.bak" MessageBoxSvc.bat
+		if ERRORLEVEL 1 (
+			call :Log Error "Message Service Update: Unable to restore backup of messageBoxSvc.bat"
+		)
+		exit /b 1
+	)
+	call :Log Verbose "Message Service Update: Backing up current Uninstall.bat"
+	if exist "%MsgSvc_InstallDir%\Uninstall.bat.V%MsgSvc_ScriptMajorVersion%.%MsgSvc_ScriptMinorVersion%.bak" (
+		call :Log Error "Message Service Update: Previous Uninstall.bat backup 'Uninstall.bat.V%MsgSvc_ScriptMajorVersion%.%MsgSvc_ScriptMinorVersion%.bak' exists and thus an update cannot take place"
+		exit /b 1
+	)
+	ren "%MsgSvc_InstallDir%\Uninstall.bat" "Uninstall.bat.V%MsgSvc_ScriptMajorVersion%.%MsgSvc_ScriptMinorVersion%.bak"
+	if ERRORLEVEL 1 (
+		call :Log Error "Message Service Update: Unable to create backup of Uninstall.bat"
+		del /q "%MsgSvc_InstallDir%\Uninstall.bat"
+		ren "%MsgSvc_InstallDir%\Uninstall.bat.V%MsgSvc_ScriptMajorVersion%.%MsgSvc_ScriptMinorVersion%.bak" "Uninstall.bat"
+		exit /b 1
+	)
+	call :Log Verbose "Message Service Update: Updating MessageBoxSvc.bat"
+	call :Message_Service_Uninstall_Header
+	call :Log Verbose "Message Service Update: Porting Uninstall info from backup file"
+	rem Port additional uninstall info from backup file
+	for /f "usebackq delims== tokens=2" %%L in (`type "%MsgSvc_InstallDir%\Uninstall.bat.V%MsgSvc_ScriptMajorVersion%.%MsgSvc_ScriptMinorVersion%.bak" ^| findstr /ibc:"setlocal & set command="`) do (
+		setlocal disabledelayedexpansion
+		(
+			echo\setlocal ^& set command=%%L
+		) >> "%MsgSvc_UninstallFile%"
+		endlocal
+	)
+	call :Log Verbose "Message Service Update: Changing Permissions on Data directory"
+	icacls "%MsgSvc_DataDir%" /grant Users:^(OI^)^(CI^)F
+	if ERRORLEVEL 1 (
+		call :Log Error "Message Service Update: Failed Changing Permissions on Data directory '%MsgSvc_DataDir%'"
+	)
+	call :Log Verbose "Message Service Update: Removing update backup files"
+	del /q "%MsgSvc_InstallDir%\MessageBoxSvc.bat.bak"
+	if ERRORLEVEL 1 (
+		call :Log Warning "Message Service Update: Unable to remove messageBoxSvc.bat.bak this may cause issues on future updates"
+	)
+	call :Log Verbose "Message Service Update: Updating Registry"
+	reg add "%MsgSvc_DataReg%" /v MinorVersion /d "1" /f
+	if ERRORLEVEL 1 (
+		echo :Log Error "Message Service Update: Unable to update MinorVersion Reg Key"
+		exit /b 1
+	)
+	reg add "%MsgSvc_UninstallReg%" /v DisplayName /d "%MsgSvc_Firendly_Name%" /f
+	if ERRORLEVEL 1 (
+		echo :Log Error "Message Service Update: Unable to update Uninstall DisplayName Reg Key"
+		exit /b 1
+	)
+	reg add "%MsgSvc_UninstallReg%" /v DisplayVersion /d "%MsgSvc_ScriptMajorVersion%.%MsgSvc_ScriptMinorVersion%" /f
+	if ERRORLEVEL 1 (
+		echo :Log Error "Message Service Update: Unable to update Uninstall DisplayVersion Reg Key"
+		exit /b 1
+	)
+	reg add "%MsgSvc_UninstallReg%" /v Publisher /d "%IT_Group_Name%" /f
+	if ERRORLEVEL 1 (
+		echo :Log Error "Message Service Update: Unable to update Uninstall Publisher Reg Key"
+		exit /b 1
+	)
+	reg add "%MsgSvc_UninstallReg%" /v UninstallString /d "\"%MsgSvc_UninstallFile%\"" /f
+	if ERRORLEVEL 1 (
+		echo :Log Error "Message Service Update: Unable to update Uninstall UninstallString Reg Key"
+		exit /b 1
+	)
+	reg add "%MsgSvc_UninstallReg%" /v QuietUninstallString /d "\"%MsgSvc_UninstallFile%\" /s" /f
+	if ERRORLEVEL 1 (
+		echo :Log Error "Message Service Update: Unable to update Uninstall QuietUninstallString Reg Key"
+		exit /b 1
+	)
+	reg add "%MsgSvc_UninstallReg%" /v NoModify /d "1" /t REG_DWORD /f
+	if ERRORLEVEL 1 (
+		echo :Log Error "Message Service Update: Unable to update Uninstall NoModify Reg Key"
+		exit /b 1
+	)
+	reg add "%MsgSvc_UninstallReg%" /v NoRepair /d "1"  /t REG_DWORD /f
+	if ERRORLEVEL 1 (
+		echo :Log Error "Message Service Update: Unable to update Uninstall NoRepair Reg Key"
+		exit /b 1
+	)
+	reg delete "%MsgSvc_UninstallReg_Old%" /f
+	if ERRORLEVEL 1 (
+		echo :Log Error "Message Service Update: Unable to remove old Uninstall Reg Key"
+		exit /b 1
+	)
+	call :Log Info "Message Service Update: Done Update to V%MsgSvc_ScriptMajorVersion%.1"
 )
 exit /b 0
 
 :Message_Service_Install
 call :Log Info "Message Service Install: Installing Message Service V%MsgSvc_ScriptMajorVersion%.%MsgSvc_ScriptMinorVersion%"
-REM TODO: Install Message Service
+REM Install Message Service
 call :log Verbose "Message Service Install: Adding Directories"
 if NOT exist "%MsgSvc_InstallDir%" (
 	mkdir "%MsgSvc_InstallDir%" >nul 2>&1
@@ -1533,6 +2032,7 @@ if NOT exist "%MsgSvc_DataDir%" (
 		exit /b %Internal_Error_Code%
 	)
 )
+icacls "%MsgSvc_DataDir%" /grant Users:^(OI^)^(CI^)F
 rem call :Message_Service_Uninstall_Command rmdir /S /Q "%MsgSvc_DataDirRef%"
 
 if NOT exist "%MsgSvc_TempDir%" (
@@ -1546,7 +2046,7 @@ rem call :Message_Service_Uninstall_Command rmdir /S /Q "%MsgSvc_TempDirRef%"
 
 reg query "%MsgSvc_DataReg%" >nul 2>&1
 if ERRORLEVEL 1 (
-	reg add "%MsgSvc_DataReg%"
+	reg add "%MsgSvc_DataReg%" /f
 	if ERRORLEVEL 1 (
 		call :Log Error "Unable to create registry: '%MsgSvc_DataReg%'"
 		exit /b %Internal_Error_Code%
@@ -1567,17 +2067,11 @@ rem call :Message_Service_Uninstall_Command del /Q "%MsgSvc_InstallDirRef%\Messa
 echo\@echo off
 echo\cd /d %%~dp0
 REM Read message
-echo\set "MessageShown="
 echo\for /f "usebackq delims=|" %%%%D in ^(`dir /b "%%~1"^^^|findstr /irc:"Message_.\.txt"`^) do ^(
-echo\	if not defined MessageShown ^(
 echo\		for /f "tokens=*" %%%%L in ^(%%~1\%%%%D^) do ^(
-echo\			if not defined MessageShown ^(
-echo\				start "" /min wscript "%%~dp0MessageBox.vbs" "%%%%L" "AppsAnywhere"
-echo\				set "MessageShown=True"
-echo\			^)
+echo\			start "" /min wscript "%%~dp0MessageBox.vbs" "%%%%L" "AppsAnywhere"
 echo\		^)
 echo\		del /q "%%~1\%%%%D"
-echo\	^)
 echo\^)
 ) > "%MsgSvc_InstallDir%\MessageBoxSvc.bat"
 rem call :Message_Service_Uninstall_Command del /Q "%MsgSvc_InstallDirRef%\MessageBoxSvc.bat"
@@ -1662,18 +2156,20 @@ if ERRORLEVEL 1 (
 	call :Log Error "Unable to Import ScheduledTask: %MsgSvc_TempDir%\ScheduledTask.xml"
 	exit /b %Internal_Error_Code%
 )
-reg add "%MsgSvc_UninstallReg%" /v DisplayName /d "%MsgSvc_Firendly_Name%"
-reg add "%MsgSvc_UninstallReg%" /v Publisher /d "%IT_Group_Name%"
-reg add "%MsgSvc_UninstallReg%" /v UninstallString /d "\"%MsgSvc_UninstallFile%\""
-reg add "%MsgSvc_UninstallReg%" /v QuietUninstallString /d "\"%MsgSvc_UninstallFile%\" /s"
-reg add "%MsgSvc_UninstallReg%" /v NoModify /d "1" /t REG_DWORD
-reg add "%MsgSvc_UninstallReg%" /v NoRepair /d "1"  /t REG_DWORD
-reg add "%MsgSvc_DataReg%" /v MinorVersion /d "%MsgSvc_ScriptMinorVersion%"
+reg add "%MsgSvc_UninstallReg%" /v DisplayName /d "%MsgSvc_Firendly_Name%" /f
+reg add "%MsgSvc_UninstallReg%" /v DisplayVersion /d "%MsgSvc_ScriptMajorVersion%.%MsgSvc_ScriptMinorVersion%" /f
+reg add "%MsgSvc_UninstallReg%" /v Publisher /d "%IT_Group_Name%" /f
+reg add "%MsgSvc_UninstallReg%" /v UninstallString /d "\"%MsgSvc_UninstallFile%\"" /f
+reg add "%MsgSvc_UninstallReg%" /v QuietUninstallString /d "\"%MsgSvc_UninstallFile%\" /s" /f
+reg add "%MsgSvc_UninstallReg%" /v NoModify /d "1" /t REG_DWORD /f
+reg add "%MsgSvc_UninstallReg%" /v NoRepair /d "1"  /t REG_DWORD /f
+reg add "%MsgSvc_DataReg%" /v MinorVersion /d "%MsgSvc_ScriptMinorVersion%" /f
+call :Log Info "Message Service Install: Installed Message Service V%MsgSvc_ScriptMajorVersion%.%MsgSvc_ScriptMinorVersion%"
 
 exit /b 0
 
 :Message_Service_Install_User
-call :log Verbose "Message Service Install: Loading Scheduled Task for %full_username%"
+call :log Info "Message Service Install: Loading Scheduled Task for %full_username%"
 if NOT exist "%MsgSvc_TempDir%\%full_username%" (
 	mkdir "%MsgSvc_TempDir%\%full_username%" >nul 2>&1
 	if ERRORLEVEL 1 (
@@ -1743,10 +2239,11 @@ if ERRORLEVEL 1 (
 	exit /b %Internal_Error_Code%
 )
 call :Message_Service_Uninstall_Command schtasks /delete /F /tn "%MsgSvc_TaskSchdDir%\%full_username%\ShowMessage"
-
+call :log Info "Message Service Install: Loaded Scheduled Task for %full_username%"
 exit /b 0
 
 :Message_Service_Uninstall_Header
+REM TODO: Add code to cleanup scheduled tasks folders
 (
 echo\@echo off
 echo\set "command="
@@ -1755,10 +2252,18 @@ echo\echo Administrative permissions required. Detecting permissions...
 echo\net session ^>nul 2^>^&1
 echo\if ERRORLEVEL 1 ^(
 echo\	echo Failure: Current permission inadequate
+echo\	if "%%~1" == "Elevated" ^(
+echo\		echo Error Getting Admin, please launch manually
+echo\		pause
+echo\		exit 1
+echo\	^)
+echo\	if "%%~2" == "Elevated" ^(
+echo\		exit 1
+echo\	^)
 echo\	REM Create elevate.vbs to get us admin
 echo\	echo Set UAC = CreateObject^^^("Shell.Application"^^^) ^> %%temp%%\elevate.vbs
-echo\	echo UAC.ShellExecute "%%~s0", "", "", "runas", 1 ^>^> %%temp%%\elevate.vbs
-echo\	start "" /wait %%SystemRoot%%\System32\wscript.exe %%temp%%\elevate.vbs
+echo\	echo UAC.ShellExecute "%%~s0", WScript.Arguments^^^(0^^^), "", "runas", 1 ^>^> %%temp%%\elevate.vbs
+echo\	start "" /wait %%SystemRoot%%\System32\wscript.exe %%temp%%\elevate.vbs "%%~1 Elevated"
 echo\	if ERRORLEVEL 1 ^(
 echo\		echo Error Getting Admin, please launch manually
 echo\		if NOT "%%~1" == "/s" ^(
@@ -1785,7 +2290,10 @@ echo\for /f "usebackq delims== tokens=2" %%%%L in ^(`type "%%~dpnx0" ^^^| findst
 echo\	call %%%%L ^>nul 2^>^&1
 echo\	if ERRORLEVEL 1 ^(
 echo\		echo Error Durring Uninstall
-echo\		pause
+echo\		echo %How_To_Get_Help_Text:\n= %
+echo\		if NOT "%%~1" == "/s" ^(
+echo\			pause
+echo\		^)
 echo\		exit %Internal_Error_Code%
 echo\	^)
 echo\^)
@@ -1835,6 +2343,15 @@ exit /b 0
 REM Display Message
 call :Log Info "Preparing to display message: %~1"
 REM Initialize if not Initialized
+if /i "%MsgSvc_Enabled%" == "False" (
+	call :Log Warning "Message Service Disabled, Message will not be shown to User"
+	exit /b 0
+) else if "%MsgSvc_Enabled%" == "True" (
+	echo.>nul
+) else (
+	call :log Error "MsgSvc_Enabled is not True or False"
+	call :exit %Internal_Error_Code%
+)
 if /i "%MsgSvc_Initalized%" == "False" (
 	call :Message_Service_Initialize
 )
@@ -1857,25 +2374,31 @@ if "%MsgSvc_Initalized%" == "True" (
 		)
 	)
 	schtasks /run /tn "%MsgSvc_TaskSchdDir%\%full_username%\ShowMessage"
+	call :Log Info "Displayed message: %~1"
 ) else (
 	call :Log Warning "Message Service Unavailable, Message not Displayed to user"
 )
+
 exit /b 0
 
 :Message_Service_Save_Message <Message> <File>
 echo\%~1> %2
 exit /b
-
+:Debug_Menu_Initialize
+set "LogLevel=%LogLevel[Debug]%"
+set "MsgSvc_Enabled=False"
 :Debug_Menu
 title DEBUG
-set "LogLevel=4"
+
 CLS
 echo/Debug Menu
 echo/1. Run Mode
 echo/2. Call Function
 echo/3. Run Command
-echo/4. Toggle Echo (currently %echo%)
-choice /C 1234 /M "What do you want to do " 
+echo/4. Self Check
+echo/5. Toggle Echo (currently %echo%)
+echo/6. Toggle Message Service (currently %MsgSvc_Enabled%)
+choice /C 12345 /M "What do you want to do " 
 if "%errorlevel%"=="1" (
 	call :Debug_Run
 )
@@ -1886,10 +2409,39 @@ if "%errorlevel%"=="3" (
 	call :Debug_cmd
 )
 if "%errorlevel%"=="4" (
+	call :Debug_SelfCheck
+)
+if "%errorlevel%"=="5" (
 	call :Debug_Echo
+)
+if "%errorlevel%"=="6" (
+	call :Debug_Message_Service
 )
 goto :Debug_Menu
 call :Exit %Debug_Complete%
+
+:Debug_SelfCheck
+setlocal enabledelayedexpansion
+echo Starting Self Check
+FOR /F "tokens=1,2* Delims==" %%V IN ('set ^| findstr /ibc:UsrVar') DO (
+	set Variable=%%V
+	set Value=%%W
+	set !Variable!|find """" >nul 2>&1
+	if NOT ERRORLEVEL 1 (
+		echo !Variable! contains a " this may cause issues
+	)
+)
+for /f "usebackq delims== tokens=1" %%V in (`type "%~dpnx0" ^| findstr /ibc:"set ""UsrVar_"`) do (
+	set Variable=%%V
+	set Variable=!Variable:~5!
+	if not defined !Variable! (
+		echo !Variable! is not Defined
+	)
+)
+echo Self Check Completed
+pause
+endlocal
+exit /b 0
 
 :Debug_goto
 CLS
@@ -1952,9 +2504,33 @@ if "%echo%" == "off" (
 echo %echo%
 exit /b 0
 
+:Debug_Message_Service
+if "%MsgSvc_Enabled%" == "False" (
+	set "MsgSvc_Enabled=True"
+) else (
+	set "MsgSvc_Enabled=False"
+)
+exit /b 0
+
 :exit <errorcode>
 call :log Info "Exiting with errorcode: %~1"
 if "%Mode%" == "DEBUG" (
-	pause
+	if %1 gtr 0 (
+		echo Script would exit with error
+		choice /m "do you want to continue anyway "
+		if ERRORLEVEL 3 (
+			echo Invalid
+			pause
+		) else if ERRORLEVEL 2 (
+			echo.>nul
+		) else if ERRORLEVEL 1 (
+			call :log Debug "Exit Aborted, Resuming"
+			exit /b 0
+		) else (
+			echo.>nul
+		)
+	) else (
+		pause
+	)
 )
 exit %1
