@@ -1,67 +1,79 @@
 @set "echo=off"
 @echo %echo%
-REM Name:           UnifiedCAE.bat
-REM Purposes:       Checks for prerequisites such as .Net Framework or signs that the application is already installed and returns an errorcode if they are not met.
-REM                 Modifies computer configuration such as Firewall and AV rules.
-REM                 Modifies Application Configuration such as activating licenses and stopping services before removal
-REM                 Modifies Application Configuration to save unique machine identifiers to be reloaded as needed
-REM Usage:          Edit the below variables to detect installation of specified app, change computer configuration, and application configuration.
-REM                 The script can automatically detect what trigger is being used so no parameters are required
-REM                 If needed, Parameters can be manually specified by using the "/mode" argument followed by the mode
-REM                 Running it without parameters outside of a CAE will bring up a menu with diagnostics
-REM                 Modes are as follows: REGISTER, ACTIVATE, VIRTUALIZE, LAUNCH, EXIT, DEVIRTUALIZE, DEACTIVATE, DEBUG 
-REM                 When Defining values, use environment variables when possible
-REM Return Codes:   0:      Conditions Met
-REM                 1638:   App Already Installed
-REM                 15639:  Other Prerequisite not satisfied
-REM                 3010:   Reboot Required Error
-REM					5:		Application Launch Denied by Server (Future Use)
-REM                 1359:   Internal Error
-REM                 574:    Unhandled Error
-REM                 87:     Invalid Parameter Error
-REM Author:         Trevor Buttrey: tbuttrey@udel.edu
-REM Revisions:      August 26th 2020	- 1.0 -	Initial Release 
-REM                 August  5th 2021	- 1.1 - Bug Fixes: 
-REM													Updated Message Service to V1.1 which updates MessageBoxSvc.bat, Uninstall.bat, and the uninstall registry keys 
-REM														MessageBoxSvc.bat: 	Removed the one message per execution limit to prevent desynchronization of state that could sometimes occur resulting in the user seeing old and irrelevant messages.
-REM														Uninstall.bat: 		Added Help Text if there's an error during uninstall.
-REM																			Fixed infinite loop that can occur when user can't elevate
-REM																			Fixed error handling to respect /s switch
-REM														Uninstall Registry:	Fixed Uninstall info to show Version information.
-REM																			Fixed Uninstall GUID to be unique between IT-Groups
-REM														Data Directory:		Granted Full Access to Data Directory so that messages can be deleted after they are shown.
-REM													Updated Message Initialization error message to indicate error could be either in Install or Update
-REM													Added "/f" to all "Reg Add" calls to prevent script stall if key exists
-REM													Changed the log level and content of various messages and added a few additional messages
-REM													Corrected some example items
-REM													Rearranged some of the main functions to make more sense e.g. bypass is now after log initialize and debug checks
-REM													Fixed a log message in HW_Keys that had a blank value
-REM													Changed Logfile name to have a space instead of underscore
-REM													Removed a errant "Pause" command
-REM													Changed Settings_Override_Code to App_Override_Code to match actual usage
-REM												Features:
-REM													Added Option to Automatically Add/Remove exe location to AppPath
-REM													Added Option to Automatically Add/Remove registry keys for Solidworks EULA
-REM													Added Option to Automatically Add/Remove HASP Drivers for Rocscience
-REM													Added Application specific Debug Override
-REM													Added Web Override to enable remote override for all users
-REM													Added Elevation status to log
-REM													Added License Deactivation Custom Code Section and renamed Licensing to License Activation
-REM													Added Option to Enable/Disable Message Service if desired. If Disabled, all messages are logs but not shown to the user. 
-REM													Added Option to Debug Menu to toggle Message Service which is disabled by default in DEBUG mode
-REM													Added Option to Debug Menu to do a basic scan for potential issues
-REM													Added Functionality to handle shared machines: no removal of license, firewall rules etc.
-REM                 January  5th 2022	- 1.2 - Bug Fixes:
-REM													Fixed Username Handling for special cases
-REM													Fixed Automatic AV Rules to only add if defined
-REM													Fixed AppPath to only add if defined
-REM												Features: 
-REM						 							Updated Self Check to make actual issues Clear
-REM													Added LogLevel Override (use /LogLevel N to specify log level)
-REM													Optimized Web Overrides to load during REGISTER only
-REM													Added debug option to test run modes by re-invoking the script (which will cause things like overrides to be processed)
-
-set "Current_Version=1.2"
+    REM Name:           UnifiedCAE.bat
+    REM Purposes:       Checks for prerequisites such as .Net Framework or signs that the application is already installed and returns an errorcode if they are not met.
+    REM                 Modifies computer configuration such as Firewall and AV rules.
+    REM                 Modifies Application Configuration such as activating licenses and stopping services before removal
+    REM                 Modifies Application Configuration to save unique machine identifiers to be reloaded as needed
+    REM Usage:          Edit the below variables to detect installation of specified app, change computer configuration, and application configuration.
+    REM                 The script can automatically detect what trigger is being used so no parameters are required
+    REM                 If needed, Parameters can be manually specified by using the "/mode" argument followed by the mode
+    REM                 Running it without parameters outside of a CAE will bring up a menu with diagnostics
+    REM                 Modes are as follows: REGISTER, ACTIVATE, VIRTUALIZE, LAUNCH, EXIT, DEVIRTUALIZE, DEACTIVATE, DEBUG 
+    REM                 When Defining values, use environment variables when possible
+    REM Return Codes:   0:      Conditions Met
+    REM                 1638:   App Already Installed
+    REM                 15639:  Other Prerequisite not satisfied
+    REM                 3010:   Reboot Required Error
+    REM                 5:		Application Launch Denied by Server (Future Use)
+    REM                 1359:   Internal Error
+    REM                 574:    Unhandled Error
+    REM                 87:     Invalid Parameter Error
+    REM Author:         Trevor Buttrey: tbuttrey@udel.edu
+    REM Revisions:      August 26th 2020	- 1.0 -	Initial Release 
+    REM                 August  5th 2021	- 1.1 - Bug Fixes: 
+    REM													Updated Message Service to V1.1 which updates MessageBoxSvc.bat, Uninstall.bat, and the uninstall registry keys 
+    REM														MessageBoxSvc.bat: 	Removed the one message per execution limit to prevent desynchronization of state that could sometimes occur resulting in the user seeing old and irrelevant messages.
+    REM														Uninstall.bat: 		Added Help Text if there's an error during uninstall.
+    REM																			Fixed infinite loop that can occur when user can't elevate
+    REM																			Fixed error handling to respect /s switch
+    REM														Uninstall Registry:	Fixed Uninstall info to show Version information.
+    REM																			Fixed Uninstall GUID to be unique between IT-Groups
+    REM														Data Directory:		Granted Full Access to Data Directory so that messages can be deleted after they are shown.
+    REM													Updated Message Initialization error message to indicate error could be either in Install or Update
+    REM													Added "/f" to all "Reg Add" calls to prevent script stall if key exists
+    REM													Changed the log level and content of various messages and added a few additional messages
+    REM													Corrected some example items
+    REM													Rearranged some of the main functions to make more sense e.g. bypass is now after log initialize and debug checks
+    REM													Fixed a log message in HW_Keys that had a blank value
+    REM													Changed Logfile name to have a space instead of underscore
+    REM													Removed a errant "Pause" command
+    REM													Changed Settings_Override_Code to App_Override_Code to match actual usage
+    REM												Features:
+    REM													Added Option to Automatically Add/Remove exe location to AppPath
+    REM													Added Option to Automatically Add/Remove registry keys for Solidworks EULA
+    REM													Added Option to Automatically Add/Remove HASP Drivers for Rocscience
+    REM													Added Application specific Debug Override
+    REM													Added Web Override to enable remote override for all users
+    REM													Added Elevation status to log
+    REM													Added License Deactivation Custom Code Section and renamed Licensing to License Activation
+    REM													Added Option to Enable/Disable Message Service if desired. If Disabled, all messages are logs but not shown to the user. 
+    REM													Added Option to Debug Menu to toggle Message Service which is disabled by default in DEBUG mode
+    REM													Added Option to Debug Menu to do a basic scan for potential issues
+    REM													Added Functionality to handle shared machines: no removal of license, firewall rules etc.
+    REM                 January  5th 2022	- 1.2 - Bug Fixes:
+    REM													Fixed Username Handling for special cases
+    REM													Fixed Automatic AV Rules to only add if defined
+    REM													Fixed AppPath to only add if defined
+    REM												Features: 
+    REM						 							Updated Self Check to make actual issues Clear
+    REM													Added LogLevel Override (use /LogLevel N to specify log level)
+    REM													Optimized Web Overrides to load during REGISTER only
+    REM													Added debug option to test run modes by re-invoking the script (which will cause things like overrides to be processed)
+    REM                 January 13th 2022	- 1.3a - Bug Fixes:
+    REM													*Fixed AppPath Detection to check if the exe listed actually exists to prevent false positives
+    REM													
+    REM												Features: 
+    REM													*Added Fill helper
+    REM													*Added Built in Migration tool
+    REM													*Added Auto builder
+    REM													*Added Web Revocation for Apps
+    REM													*Added Check to see if BITS is working correctly, detect errors, and repair them if possible, fallback to alternate option, bypass if alternate doesn't work
+    REM													*Added Option to choose if we use BITS or POWERSHELL CURL for downloads as well as an option to allow fallback to the alternative.
+    REM													*Added Check to see if PowerShell is working correctly
+    REM													*Added Error State Codes to quicken diagnostics
+    REM													*Added Option to look for other user's UnifiedCAE scripts on the machine to look for conflicts and automatically treat the machine as shared if they are there
+    set "Current_Version=1.3 Alpha"
 
 REM ========== Basic Settings ==========
 
@@ -404,8 +416,9 @@ set "Override_Mode_List=ALL, REGISTER, ACTIVATE, VIRTUALIZE, LAUNCH, EXIT, DEVIR
 set "Shared_Machine=False"
 set "Uninstall_GUID_Allowed=Deny"
 set "Primary_Exe_Allowed=Deny"
-set "HW_Key_User_Location=%ProgramData%\%IT_Group_Name%\AppsAnywhere\HW_Keys\User
-set "HW_Key_Machine_Location=%ProgramData%\%IT_Group_Name%\AppsAnywhere\HW_Keys\Machine
+set "HW_Key_User_Location=%ProgramData%\%IT_Group_Name%\AppsAnywhere\HW_Keys\User"
+set "HW_Key_Machine_Location=%ProgramData%\%IT_Group_Name%\AppsAnywhere\HW_Keys\Machine"
+set "Auto_Fill_State_File_Location=%~dp0Clean_State.ini"
 set "DOTNET_35_Registry_Location=HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v3.5"
 set "DOTNET_4x_Registry_Location=HKLM\SOFTWARE\Microsoft\NET Framework Setup\NDP\v4\Full"
 set "Uninstall_Registry_Location=HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"
@@ -554,7 +567,7 @@ if defined UsrVar_Require_DotNet_4x (
 					if "[%Auto_Install_DotNet_4x%]" == "[True]" (
 						if defined DotNET_Download[%UsrVar_Require_DotNet_4x%] (
 							if "[%Show_DotNet_4x_Installing_Message%]" == "[True]" (
-								call :1 "%DotNet_4x_Installing_Text%"
+								call :Show_Message "%DotNet_4x_Installing_Text%"
 							)
 							call :Log Verbose "DotNet 4.x: Downloading .Net %UsrVar_Require_DotNet_4x% installer from '!DotNET_Download[%UsrVar_Require_DotNet_4x%]!'"
 							bitsadmin /transfer ".NET %UsrVar_Require_DotNet_4x% Download" /priority foreground "!DotNET_Download[%UsrVar_Require_DotNet_4x%]!" "%~dp0\DotNet_%UsrVar_Require_DotNet_4x%.exe" > nul
@@ -1829,7 +1842,7 @@ if defined Web_Override_Location (
 		)
 		REM call :log Debug "Checking for Web Override: %Web_Override_Location%/%Web_Override_Name%_All"
 		REM bitsadmin /transfer "UnifiedCAE Full Override check" /priority foreground "%Web_Override_Location%/%Web_Override_Name%_All" "%Override_Location%\WEB %Override_Name% All" > nul
-		
+		call :log Debug "If the log dies after the next item it's probably a BITS issue"
 		for %%m in (%Override_Mode_List%) do (
 			call :log Debug "Checking for Web Override: %Web_Override_Location%/%Web_Override_Name%_%%m"
 			bitsadmin /transfer "UnifiedCAE %mode% Override check" /priority foreground "%Web_Override_Location%/%Web_Override_Name%_%%m" "%Override_Location%\WEB %Override_Name% %%m" > nul
@@ -2440,9 +2453,11 @@ echo/1. Run Mode
 echo/2. Call Function
 echo/3. Run Command
 echo/4. Self Check
-echo/5. Toggle Echo (currently %echo%)
-echo/6. Toggle Message Service (currently %MsgSvc_Enabled%)
-choice /C 123456 /M "What do you want to do " 
+echo/5. Fill Helper
+echo/6. Auto Fill
+echo/7. Toggle Echo (currently %echo%)
+echo/8. Toggle Message Service (currently %MsgSvc_Enabled%)
+choice /C 12345678 /M "What do you want to do " 
 if "%errorlevel%"=="1" (
 	call :Debug_Run
 )
@@ -2456,9 +2471,15 @@ if "%errorlevel%"=="4" (
 	call :Debug_SelfCheck
 )
 if "%errorlevel%"=="5" (
-	call :Debug_Echo
+	call :Fill_Helper
 )
 if "%errorlevel%"=="6" (
+	call :Auto_Fill
+)
+if "%errorlevel%"=="7" (
+	call :Debug_Echo
+)
+if "%errorlevel%"=="8" (
 	call :Debug_Message_Service
 )
 goto :Debug_Menu
@@ -2524,6 +2545,123 @@ for /f "usebackq delims== tokens=1" %%V in (`type "%~dpnx0" ^| findstr /ibc:"set
 )
 echo Self Check Completed
 pause
+endlocal
+exit /b 0
+
+:Auto_Fill
+setlocal enabledelayedexpansion
+CLS
+echo/Debug Menu
+echo/1. Save Clean State (stage 1)
+echo/2. Generate Values (stage 2)
+echo/3. Debug Menu
+
+choice /C 123 /M "What do you want to do " 
+if "%errorlevel%"=="1" (
+	call :Auto_Fill_Stage_1
+)
+if "%errorlevel%"=="2" (
+	call :Auto_Fill_Stage_2
+)
+endlocal
+exit /b 0
+
+:Auto_Fill_Stage_1
+setlocal enabledelayedexpansion
+REM TODO: Check if file exists and promt about overwriting
+
+REM TODO: Get current uninstall GUIDs and their friendly names
+echo/[Uninstall_GUID]>> %Auto_Fill_State_File_Location%
+REM Uninstall_WOW64_Registry_Location
+
+for %%D IN (%Uninstall_Registry_Location%,%Uninstall_WOW64_Registry_Location%) DO (
+    for /f "tokens=*" %%I in ('reg query "%%D"') do (
+    	setlocal
+    	set query=%%I
+    	set query=!query:HKEY_LOCAL_MACHINE=HKLM!
+    	for /f "tokens=1,2,*" %%J in ('reg query "!query!" 2^>nul') do (
+          echo %%J | findstr /i /C:"DisplayName" > nul
+    			if NOT ERRORLEVEL 1 (
+    				set "productname=%%L"
+    			)
+    	)
+    	echo/!query! = !productname!>> %Auto_Fill_State_File_Location%
+    	endlocal
+    )
+)
+
+REM TODO: Get current Start Menu folders
+setlocal
+echo/[Start Menu]>> %Auto_Fill_State_File_Location%
+for /f "tokens=*" %%F in ('dir /b /s /a:d "%ProgramData%\Microsoft\Windows\Start Menu\Programs"') do (
+	set "directories="
+	for /f "tokens=*" %%D in ('dir /b /a:d "%%F"') do (
+	   if not defined directories (
+			set "directories=%%D"
+		) else (
+			set "directories=!directories!;%%D"
+		)
+	)
+	echo\%%F = !directories!>> %Auto_Fill_State_File_Location%
+)
+endlocal
+
+REM TODO: Get current Program Files folders
+echo/[Program Files]>> %Auto_Fill_State_File_Location%
+for %%D IN ("%ProgramFiles%","%ProgramFiles(x86)%") DO (
+   for /f "tokens=*" %%F in ('dir /b /a:d %%D') do (
+		set "directories="
+       for /f "tokens=*" %%I in ('dir /b /a:d "%%~D\%%F"') do (
+       	if not defined directories (
+       		set "directories=%%I"
+       	) else (
+       		set "directories=!directories!;%%I"
+       	)
+      )
+      echo\%%~D\%%F = !directories!>> %Auto_Fill_State_File_Location%
+   )
+)
+REM TODO: Get current Programdata folders
+echo/[Program Data]>> %Auto_Fill_State_File_Location%
+for /f "tokens=*" %%F in ('dir /b /a:d "%ProgramData%"') do (
+	set "directories="
+   for /f "tokens=*" %%I in ('dir /b /a:d "%ProgramData%\%%F"') do (
+   	if not defined directories (
+   		set "directories=%%I"
+   	) else (
+   		set "directories=!directories!;%%I"
+   	)
+   )
+	echo\%ProgramData%\%%F = !directories!>> %Auto_Fill_State_File_Location%
+)
+REM TODO: Get current SOFTWARE Registry Keys
+echo/[Registry Data]>> %Auto_Fill_State_File_Location%
+for %%D IN (HKEY_LOCAL_MACHINE\Software,HKEY_LOCAL_MACHINE\Software\WOW6432Node) DO (
+    for /f "tokens=*" %%I in ('reg query "%%D"') do (
+    	setlocal
+    	set query=%%I
+    	set query=!query:HKEY_LOCAL_MACHINE=HKLM!
+    	echo/!query!>> %Auto_Fill_State_File_Location%
+    	endlocal
+    )
+)
+
+REM TODO: Get if .NET 3.5 is installed
+
+REM TODO: Get current version of .NET 4.x
+
+REM TODO: Get current firewall rules
+
+REM TODO: Get current Services
+
+REM TODO: Get current Autodesk products
+pause
+endlocal
+exit /b 0
+
+:Auto_Fill_Stage_2
+setlocal enabledelayedexpansion
+
 endlocal
 exit /b 0
 
