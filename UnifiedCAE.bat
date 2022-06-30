@@ -2570,7 +2570,7 @@ exit /b 0
 setlocal enabledelayedexpansion
 REM TODO: Check if file exists and promt about overwriting
 
-REM TODO: Get current uninstall GUIDs and their friendly names
+REM Get current uninstall GUIDs and their friendly names
 echo/[Uninstall_GUID]>> %Auto_Fill_State_File_Location%
 REM Uninstall_WOW64_Registry_Location
 
@@ -2590,7 +2590,7 @@ for %%D IN (%Uninstall_Registry_Location%,%Uninstall_WOW64_Registry_Location%) D
     )
 )
 
-REM TODO: Get current Start Menu folders
+REM Get current Start Menu folders
 setlocal
 echo/[Start Menu]>> %Auto_Fill_State_File_Location%
 for /f "tokens=*" %%F in ('dir /b /s /a:d "%ProgramData%\Microsoft\Windows\Start Menu\Programs"') do (
@@ -2606,7 +2606,7 @@ for /f "tokens=*" %%F in ('dir /b /s /a:d "%ProgramData%\Microsoft\Windows\Start
 )
 endlocal
 
-REM TODO: Get current Program Files folders
+REM Get current Program Files folders
 echo/[Program Files]>> %Auto_Fill_State_File_Location%
 for %%D IN ("%ProgramFiles%","%ProgramFiles(x86)%") DO (
    for /f "tokens=*" %%F in ('dir /b /a:d %%D') do (
@@ -2621,7 +2621,7 @@ for %%D IN ("%ProgramFiles%","%ProgramFiles(x86)%") DO (
       echo\%%~D\%%F = !directories!>> %Auto_Fill_State_File_Location%
    )
 )
-REM TODO: Get current Programdata folders
+REM Get current Programdata folders
 echo/[Program Data]>> %Auto_Fill_State_File_Location%
 for /f "tokens=*" %%F in ('dir /b /a:d "%ProgramData%"') do (
 	set "directories="
@@ -2634,14 +2634,14 @@ for /f "tokens=*" %%F in ('dir /b /a:d "%ProgramData%"') do (
    )
 	echo\%ProgramData%\%%F = !directories!>> %Auto_Fill_State_File_Location%
 )
-REM TODO: Get current SOFTWARE Registry Keys
+REM Get current SOFTWARE Registry Keys
 echo/[Registry Data]>> %Auto_Fill_State_File_Location%
 for %%D IN (HKEY_LOCAL_MACHINE\Software,HKEY_LOCAL_MACHINE\Software\WOW6432Node) DO (
     for /f "tokens=*" %%I in ('reg query "%%D"') do (
     	setlocal
     	set query=%%I
     	set query=!query:HKEY_LOCAL_MACHINE=HKLM!
-    	echo/!query!>> %Auto_Fill_State_File_Location%
+    	echo/!query! = >> %Auto_Fill_State_File_Location%
     	endlocal
     )
 )
@@ -2660,10 +2660,137 @@ endlocal
 exit /b 0
 
 :Auto_Fill_Stage_2
-setlocal enabledelayedexpansion
+setlocal EnableDelayedExpansion
 
+REM TODO: Load Clean State into memory
+
+set "section=[Default]"
+for /F "tokens=1* Delims==" %%L in (%Auto_Fill_State_File_Location%) do (
+    echo %%L|findstr /ric:"^\[.*\]$" >nul
+	 if NOT ERRORLEVEL 1 (
+		set "section=%%L"
+	 ) else (
+       rem echo !section!: "%%L" and "%%M"
+		 if "[%%M]" == "[ ]" (
+			set "Value=;"
+		 ) else (
+			set "Value=%%M"
+		 )
+		 call :Trim Value !Value!
+		 call :Trim Key %%~L
+		 set Clean_State!section![!Key!]=!value!
+	 )
+    
+)
+echo ===== Start All Vars =====
+set|findstr /BIC:Clean_State
+echo ===== End All Vars =====
+
+REM TODO: Get current uninstall GUIDs and their friendly names
+REM echo/[Uninstall_GUID]>> %Auto_Fill_State_File_Location%
+REM Uninstall_WOW64_Registry_Location
+
+for %%D IN (%Uninstall_Registry_Location%,%Uninstall_WOW64_Registry_Location%) DO (
+    for /f "tokens=*" %%I in ('reg query "%%D"') do (
+    	setlocal
+    	set query=%%~I
+    	set query=!query:HKEY_LOCAL_MACHINE=HKLM!
+      if NOT defined Clean_State[Uninstall_GUID][!query!] (
+			echo !query! is new
+		)
+    	rem echo/!query! = !productname!>> %Auto_Fill_State_File_Location%
+    	endlocal
+    )
+)
+
+REM TODO: Get current Start Menu folders
+setlocal
+REM echo/[Start Menu]>> %Auto_Fill_State_File_Location%
+for /f "tokens=*" %%F in ('dir /b /s /a:d "%ProgramData%\Microsoft\Windows\Start Menu\Programs"') do (
+	set "directories="
+	for /f "tokens=*" %%D in ('dir /b /a:d "%%F"') do (
+	   if not defined directories (
+			set "directories=%%D"
+		) else (
+			set "directories=!directories!;%%D"
+		)
+	)
+	   rem echo Clean_State[Start Menu][%%~nF]
+		setlocal DisableExtensions
+	   if "[!Clean_State[Start Menu][%%~F]!]" == "[]" (
+			echo %%F is new
+		)
+		endlocal
+	rem echo\%%F = !directories!>> %Auto_Fill_State_File_Location%
+)
+endlocal
+
+pause
+
+REM TODO: Get current Program Files folders
+REM echo/[Program Files]>> %Auto_Fill_State_File_Location%
+for %%D IN ("%ProgramFiles%","%ProgramFiles(x86)%") DO (
+   for /f "tokens=*" %%F in ('dir /b /a:d %%D') do (
+		set "directories="
+       for /f "tokens=*" %%I in ('dir /b /a:d "%%~D\%%F"') do (
+       	if not defined directories (
+       		set "directories=%%I"
+       	) else (
+       		set "directories=!directories!;%%I"
+       	)
+      )
+		setlocal DisableExtensions
+		if "[!Clean_State[Program Files][%%~D\%%F]!]" == "[]" (
+			echo %%~D\%%F is new
+		)
+		endlocal
+      rem echo\%%~D\%%F = !directories!>> %Auto_Fill_State_File_Location%
+   )
+)
+
+pause
+REM TODO: Get current Programdata folders
+REM echo/[Program Data]>> %Auto_Fill_State_File_Location%
+for /f "tokens=*" %%F in ('dir /b /a:d "%ProgramData%"') do (
+	set "directories="
+   for /f "tokens=*" %%I in ('dir /b /a:d "%ProgramData%\%%F"') do (
+   	if not defined directories (
+   		set "directories=%%I"
+   	) else (
+   		set "directories=!directories!;%%I"
+   	)
+   )
+	setlocal DisableExtensions
+	if "[!Clean_State[Program Data][%ProgramData%\%%F]!]" == "[]" (
+		echo %ProgramData%\%%F is new
+	)
+	endlocal
+	rem echo\%ProgramData%\%%F = !directories!>> %Auto_Fill_State_File_Location%
+)
+pause
+REM TODO: Get current SOFTWARE Registry Keys
+REM echo/[Registry Data]>> %Auto_Fill_State_File_Location%
+for %%D IN (HKEY_LOCAL_MACHINE\Software,HKEY_LOCAL_MACHINE\Software\WOW6432Node) DO (
+    for /f "tokens=*" %%I in ('reg query "%%D"') do (
+    	setlocal
+    	set query=%%~I
+    	set query=!query:HKEY_LOCAL_MACHINE=HKLM!
+		if NOT defined Clean_State[Registry Data][!query!] (
+			echo !query! is new
+		)
+    	rem echo/!query!>> %Auto_Fill_State_File_Location%
+    	endlocal
+    )
+)
+pause
 endlocal
 exit /b 0
+
+:Trim
+SetLocal EnableDelayedExpansion
+set Params=%*
+for /f "tokens=1*" %%a in ("!Params!") do EndLocal & set %1=%%b
+exit /b
 
 :Debug_goto
 CLS
