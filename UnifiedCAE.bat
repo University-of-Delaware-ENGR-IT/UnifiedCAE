@@ -60,8 +60,10 @@ REM						 							Updated Self Check to make actual issues Clear
 REM													Added LogLevel Override (use /LogLevel N to specify log level)
 REM													Optimized Web Overrides to load during REGISTER only
 REM													Added debug option to test run modes by re-invoking the script (which will cause things like overrides to be processed)
+REM                 August  28th 2022	- 1.2.1 - Bug Fixes:
+REM													Fixed AppPath Checking to Verify if item actually exists
 
-set "Current_Version=1.2"
+set "Current_Version=1.2.1"
 
 REM ========== Basic Settings ==========
 
@@ -746,8 +748,58 @@ endlocal
 exit /b
 
 :Check_AppPath <Exe_Location> <Allowed>
-call :Check_Registry "%AppPath_Registry_location%\%~nx1" "%~2"
-call :Check_Registry "%AppPath_WOW64_Registry_location%\%~nx1" "%~2"
+setlocal enabledelayedexpansion
+set exe_found=False
+call :log Verbose "AppPath: Checking for '%~nx1' Allowed: '%~2'"
+reg query "%AppPath_Registry_location%\%~nx1" >nul 2>&1
+if NOT ERRORLEVEL 1 (
+	call :Log Debug "AppPath: Found entry for: '%~nx1'"
+	for /f "tokens=1,2*" %%v in ('reg query "%AppPath_Registry_location%\%~nx1"') do (
+	   if "[%%v]" == "[Path]" (
+			call :Log Debug "AppPath: Path Found: '%%x'"
+			if exist "%%x\%~nx1" (
+				call :Log Debug "AppPath: EXE Found: '%%x\%~nx1'"
+				set exe_found=True
+			) else (
+				call :Log Debug "AppPath: EXE Not Found: '%%x\%~nx1'"
+				call :Log Verbose "AppPath: Found 'path' entry in AppPath but EXE not found at location specified: '%%x\%~nx1'"
+				REM TODO: Check if AppPath was set by this script and cleanup if it was
+			)
+		)
+		if "[%%v]" == "[(Default)]" (
+			call :Log Debug "AppPath: EXE Location Found: '%%x'"
+			if exist "%%x" (
+				call :Log Debug "AppPath: EXE Found: '%%x'"
+				set exe_found=True
+			) else (
+				call :Log Debug "AppPath: EXE Not Found: '%%x'"
+				call :Log Verbose "AppPath: Found 'Default' entry in AppPath but EXE not found at location specified: '%%x'"
+				REM TODO: Check if AppPath was set by this script and cleanup if it was
+			)
+		)
+	)
+	if "[!exe_found!]" == "[True]" (
+		if "%~2" == "Deny" (
+			call :Log Warning "AppPath: Found: '%~nx1'"
+			call :Show_Message "%App_Installed_Text%"
+			call :exit %App_Installed_Code%
+		) else if "%~2" == "Warn" (
+			call :Log Warning "AppPath: Found: '%~nx1'"
+			call :Show_Message "%App_Reminent_Text%"
+		) else if "%~2" == "Allow" (
+			call :log Verbose "AppPath: Found: '%~nx1'"
+		) else (
+			call :Log Error "AppPath: Invalid Value: '%~2'"
+			call :Show_Message "%Internal_Error_Text%"
+			call :exit %Internal_Error_Code%
+		)
+	) else (
+	   call :log Verbose "AppPath: '%~nx1' not Found"
+	)
+) else (
+	call :log Verbose "AppPath: '%~nx1' not found"
+)
+endlocal
 exit /b
 
 :Check_License <item> <allowed>
